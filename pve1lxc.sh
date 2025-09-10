@@ -1,17 +1,29 @@
 #!/usr/bin/env bash
 # create-lxc-interactive.sh
-# Interactive LXC creator for Proxmox (robust version)
+# Interactive LXC creator for Proxmox (styled + progress)
 
 set -euo pipefail
 NODE="$(hostname -s)"
 
+# ---- Colors ----
+RED='\033[0;31m'
+GREEN='\033[0;32m'
+YELLOW='\033[1;33m'
+CYAN='\033[0;36m'
+RESET='\033[0m'
+
 # ---- Helper functions ----
+info() { echo -e "${CYAN}[INFO]${RESET} $*"; }
+success() { echo -e "${GREEN}[OK]${RESET} $*"; }
+warn() { echo -e "${YELLOW}[WARN]${RESET} $*"; }
+error() { echo -e "${RED}[ERROR]${RESET} $*" >&2; }
+
 choose() {
-  prompt="$1"; shift
-  options=("$@")
+  local prompt="$1"; shift
+  local options=("$@")
   while :; do
     echo
-    echo "$prompt"
+    echo -e "${CYAN}$prompt${RESET}"
     for i in "${!options[@]}"; do
       printf "  %2d) %s\n" $((i+1)) "${options[$i]}"
     done
@@ -20,11 +32,26 @@ choose() {
       echo "${options[$((choice-1))]}"
       return 0
     fi
-    echo "Invalid choice."
+    warn "Invalid choice."
   done
 }
 
+spinner() {
+  local pid=$1
+  local delay=0.1
+  local spinstr='|/-\'
+  while kill -0 "$pid" 2>/dev/null; do
+    local temp=${spinstr#?}
+    printf " [%c]  " "$spinstr"
+    spinstr=$temp${spinstr%"$temp"}
+    sleep $delay
+    printf "\b\b\b\b\b\b"
+  done
+  printf "      \b\b\b\b\b\b"
+}
+
 get_next_vmid() {
+  local nextid
   nextid="$(pvesh get /cluster/nextid 2>/dev/null || true)"
   if [[ -n "$nextid" ]]; then echo "$nextid"; return; fi
   for id in $(seq 100 9999); do
@@ -32,44 +59,48 @@ get_next_vmid() {
       echo "$id"; return
     fi
   done
-  echo "ERROR: couldn't find free vmid" >&2
+  error "Couldn't find free VMID"
   exit 1
 }
 
-# ---- Start script ----
+# ---- Step 1: VMID ----
+info "Step 1: Determining next available VMID..."
 VMID="$(get_next_vmid)"
-echo "Suggested VMID: $VMID"
+echo -e "${YELLOW}Suggested VMID: $VMID${RESET}"
 read -rp "Use suggested VMID? [Y/n] " use_suggest
 if [[ "$use_suggest" =~ ^[Nn] ]]; then
   read -rp "Enter VMID to use: " VMID
 fi
 
+# ---- Step 2: Resources ----
+info "Step 2: Define container resources..."
 read -rp "Hostname: " HOSTNAME
 read -rp "Cores (e.g. 2): " CORES
 read -rp "Memory in MB (e.g. 2048): " MEMORY
 read -rp "Disk size in GB (e.g. 30): " DISK_GB
 
-# ---- Privilege level ----
-PRIV_LEVEL=$(choose "Container privilege level:" "Privileged" "Unprivileged")
+# ---- Step 3: Privilege ----
+PRIV_LEVEL=$(choose "Step 3: Container privilege level:" "Privileged" "Unprivileged")
 [[ "$PRIV_LEVEL" == "Privileged" ]] && PRIV_OPT="--unprivileged 0" || PRIV_OPT="--unprivileged 1"
 
-# ---- Root password ----
+# ---- Step 4: Root password ----
+info "Step 4: Set root password..."
 while :; do
   read -rsp "Enter root password: " ROOTPW; echo
   read -rsp "Confirm root password: " ROOTPW2; echo
   [[ "$ROOTPW" == "$ROOTPW2" ]] && break
-  echo "Passwords don't match, try again."
+  warn "Passwords don't match, try again."
 done
 
-# ---- Template discovery (JSON-safe) ----
+# ---- Step 5: Template discovery ----
+info "Step 5: Discovering templates..."
 if ! command -v jq >/dev/null 2>&1; then
-  echo "ERROR: jq is required for template discovery. Install it first." >&2
+  error "jq is required for template discovery."
   exit 1
 fi
 
 mapfile -t ALL_STORAGES < <(pvesm status | tail -n +2 | awk '{print $1}')
 declare -A STORAGE_TEMPLATES
-
 for st in "${ALL_STORAGES[@]}"; do
   templates=$(pvesh get /nodes/"$NODE"/storage/"$st"/content 2>/dev/null \
     | jq -r '.[] | select(.content=="vztmpl") | .volid' 2>/dev/null)
@@ -81,24 +112,21 @@ CHOSEN_ST=$(choose "Select storage that contains templates:" "${TEMPLATE_STS[@]}
 mapfile -t tmpl_options < <(echo "${STORAGE_TEMPLATES[$CHOSEN_ST]}")
 CHOSEN_TEMPLATE=$(choose "Select template:" "${tmpl_options[@]}")
 
-# ---- Disk storage ----
+# ---- Step 6: Disk storage ----
 CHOSEN_DISK_STORAGE=$(choose "Select storage for container disk:" "${ALL_STORAGES[@]}")
 ROOTFS_ARG="${CHOSEN_DISK_STORAGE}:${DISK_GB}G"
 
-# ---- Bridge selection (only vmbr*) ----
+# ---- Step 7: Bridge selection ----
 mapfile -t BRIDGES < <(
   for br in /sys/class/net/*; do
     [[ -d "$br/bridge" ]] && [[ "$(basename "$br")" == vmbr* ]] && echo "$(basename "$br")"
   done
 )
-if [[ ${#BRIDGES[@]} -eq 0 ]]; then
-  echo "ERROR: No vmbr* bridges detected on this node." >&2
-  exit 1
-fi
+[[ ${#BRIDGES[@]} -eq 0 ]] && { error "No vmbr* bridges detected."; exit 1; }
 CHOSEN_BRIDGE=$(choose "Select bridge:" "${BRIDGES[@]}")
 
-# ---- Create LXC ----
-echo "Creating LXC..."
+# ---- Step 8: Create LXC ----
+info "Step 8: Creating LXC container..."
 pct create "$VMID" "$CHOSEN_TEMPLATE" \
   --hostname "$HOSTNAME" \
   --cores "$CORES" \
@@ -109,25 +137,30 @@ pct create "$VMID" "$CHOSEN_TEMPLATE" \
   --password "$ROOTPW"
 
 pct start "$VMID"
+success "Container $VMID started."
 
-# ---- Update & upgrade (non-interactive) ----
-echo "Running apt update & upgrade..."
+# ---- Step 9: Update & upgrade ----
+info "Step 9: Updating & upgrading packages..."
 pct exec "$VMID" -- bash -c "
   export DEBIAN_FRONTEND=noninteractive
   apt-get update -y && apt-get upgrade -y
-"
+" &
+spinner $!
+success "Packages updated."
 
-# ---- Enable root login + password authentication ----
-echo "Enabling root login + password authentication..."
+# ---- Step 10: Enable root login ----
+info "Step 10: Configuring SSH..."
 pct exec "$VMID" -- bash -c "
   sed -i -E 's/^#?PermitRootLogin.*/PermitRootLogin yes/' /etc/ssh/sshd_config
   sed -i -E 's/^#?PasswordAuthentication.*/PasswordAuthentication yes/' /etc/ssh/sshd_config
   (systemctl restart sshd || systemctl restart ssh || service ssh restart || true)
 "
+success "SSH configured."
 
-# ---- Display result ----
-echo "Container created:"
+# ---- Step 11: Display results ----
+echo
+success "Container created successfully!"
 pct config "$VMID" | grep -i net0
 mac=$(pct config "$VMID" | sed -n 's/.*hwaddr=\([^,]*\).*/\1/p')
 [[ -n "$mac" ]] && echo "MAC Address: $mac"
-echo "You can access the container with: pct enter $VMID"
+info "Access container with: pct enter $VMID"
