@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # create-lxc-interactive.sh
-# Interactive LXC creator for Proxmox (styled + progress)
+# Interactive LXC creator for Proxmox (styled + progress + confirm)
 
 set -euo pipefail
 NODE="$(hostname -s)"
@@ -124,6 +124,26 @@ mapfile -t BRIDGES < <(
 )
 [[ ${#BRIDGES[@]} -eq 0 ]] && { error "No vmbr* bridges detected."; exit 1; }
 CHOSEN_BRIDGE=$(choose "Select bridge:" "${BRIDGES[@]}")
+
+# ---- Step 7.5: Confirm settings ----
+echo
+warn "Please review your configuration:"
+echo "  VMID:        $VMID"
+echo "  Hostname:    $HOSTNAME"
+echo "  Cores:       $CORES"
+echo "  Memory:      ${MEMORY}MB"
+echo "  Disk:        $ROOTFS_ARG"
+echo "  Privileged:  $PRIV_LEVEL"
+echo "  Template:    $CHOSEN_TEMPLATE"
+echo "  Disk Store:  $CHOSEN_DISK_STORAGE"
+echo "  Bridge:      $CHOSEN_BRIDGE"
+echo
+
+read -rp "Proceed with creation? [y/N] " confirm
+if [[ ! "$confirm" =~ ^[Yy]$ ]]; then
+  error "Creation cancelled."
+  exit 1
+fi
 
 # ---- Step 8: Create LXC ----
 info "Step 8: Creating LXC container..."
