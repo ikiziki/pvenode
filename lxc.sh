@@ -27,41 +27,52 @@ declare BRIDGE      # container bridge
 # ---- HELPERS ----
 # pick a template from all storage locations
 pick_template() {
-    echo -e "${CYAN}Scanning Proxmox for LXC templates...${RESET}"
+    local STORAGE_DIRS
+    local NON_EMPTY_DIRS=()
+    local TEMPLATES=()
+    local CHOICE
 
-    # Get all template images across all storages
-    mapfile -t TEMPLATE_LIST < <(
-        for STORAGE in $(pvesm status -content vztmpl | awk 'NR>1 {print $1}'); do
-            pvesm list "$STORAGE" --content vztmpl 2>/dev/null | awk -v st="$STORAGE" '{print st "/" $1}'
+    # Get all storage directories
+    STORAGE_DIRS=(/var/lib/vz/template/*)
+
+    # Filter out empty directories
+    for dir in "${STORAGE_DIRS[@]}"; do
+        if [ -n "$(ls -A "$dir" 2>/dev/null)" ]; then
+            NON_EMPTY_DIRS+=("$dir")
+        fi
+    done
+
+    # Collect templates from non-empty directories
+    for dir in "${NON_EMPTY_DIRS[@]}"; do
+        for tmpl in "$dir"/*; do
+            [ -f "$tmpl" ] && TEMPLATES+=("$tmpl")
         done
-    )
+    done
 
-    if [ "${#TEMPLATE_LIST[@]}" -eq 0 ]; then
-        echo -e "${RED}No LXC templates found on any storage.${RESET}"
-        return 1
+    # Exit if no templates found
+    if [ ${#TEMPLATES[@]} -eq 0 ]; then
+        echo "No templates found in any storage."
+        exit 1
     fi
 
-    # Display numbered list
-    echo -e "${YELLOW}Available templates:${RESET}"
-    for i in "${!TEMPLATE_LIST[@]}"; do
-        printf "  %2d) %s\n" "$((i+1))" "${TEMPLATE_LIST[$i]}"
+    # Display numbered list for user
+    echo "Available templates:"
+    for i in "${!TEMPLATES[@]}"; do
+        printf "  %2d) %s\n" "$((i+1))" "$(basename "${TEMPLATES[i]}")"
     done
-    echo "  q) Quit"
 
     # Ask user to choose
     while :; do
-        read -rp "Select a template by number (or q to quit): " choice
-        if [[ "$choice" =~ ^[0-9]+$ ]] && (( choice >= 1 && choice <= ${#TEMPLATE_LIST[@]} )); then
-            TEMPLATE="${TEMPLATE_LIST[$((choice-1))]}"
-            echo -e "${GREEN}You chose: $TEMPLATE${RESET}"
+        read -rp "Select a template number: " CHOICE
+        if [[ "$CHOICE" =~ ^[0-9]+$ ]] && [ "$CHOICE" -ge 1 ] && [ "$CHOICE" -le "${#TEMPLATES[@]}" ]; then
             break
-        elif [[ "$choice" =~ ^[qQ]$ ]]; then
-            echo -e "${YELLOW}Exiting template selection.${RESET}"
-            return 1
-        else
-            echo -e "${RED}Invalid selection, try again.${RESET}"
         fi
+        echo "Invalid selection, try again."
     done
+
+    # Set TEMPLATE variable with full path
+    TEMPLATE="${TEMPLATES[$((CHOICE-1))]}"
+    echo "Selected template: $TEMPLATE"
 }
 
 # ---- Gather Input ----
