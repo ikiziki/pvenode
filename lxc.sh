@@ -25,27 +25,38 @@ declare PRIVLEVEL   # container privilege level
 declare BRIDGE      # container bridge
 
 # ---- HELPERS ----
-# pick a template from all storage locations
-pick_template() {
+# ---- Gather Input ----
+setup() {
+	echo "===== Set Host Specifications ====="
+	read -p "Enter hostname (eg. skynet)" HOSTNAME
+	read -p "Enter core count (eg. 2)" CORECOUNT
+	read -p "Enter memory (eg. 2048)" MEMORY
+	read -p "Enter disk size (eg. 30)" STORAGE
 }
 
-# ---- Gather Input ----
-step_one() {
-    # Example: gather VMID, HOSTNAME, CORECOUNT, etc.
-    :
+# pick a template from all storage locations
+pick_template() {
+	echo "TEMPLATE"
+}
+
+# pick a rootfs storage location
+pick_storage() {
+	echo "STORAGE"
 }
 
 # ---- Create LXC ---- 
-step_two() {
-    # Example: pct create command using $TEMPLATE
-    :
+create() {
+	echo "CREATE"
 }
 
 # ---- Clean up ----
-step_three() {
-    # Example: any cleanup if creation fails
-    :
+cleanup() {
+	echo "CLEANUP"
 }
 
 # ---- Main thread ----
+setup
 pick_template
+pick_storage
+create
+cleanup
