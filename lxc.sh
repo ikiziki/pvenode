@@ -28,23 +28,15 @@ declare BRIDGE      # container bridge
 # pick a template from all storage locations
 pick_template() {
     local STORAGE_DIRS
-    local NON_EMPTY_DIRS=()
     local TEMPLATES=()
     local CHOICE
 
-    # Get all storage directories
+    # Get all directories under /var/lib/vz/template
     STORAGE_DIRS=(/var/lib/vz/template/*)
 
-    # Filter out empty directories
+    # Collect template files
     for dir in "${STORAGE_DIRS[@]}"; do
-        if [ -n "$(ls -A "$dir" 2>/dev/null)" ]; then
-            NON_EMPTY_DIRS+=("$dir")
-        fi
-    done
-
-    # Collect templates from non-empty directories
-    for dir in "${NON_EMPTY_DIRS[@]}"; do
-        for tmpl in "$dir"/*; do
+        for tmpl in "$dir"/*.{tar,tar.gz,tar.zst,tar.xz} 2>/dev/null; do
             [ -f "$tmpl" ] && TEMPLATES+=("$tmpl")
         done
     done
