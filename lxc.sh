@@ -27,46 +27,6 @@ declare BRIDGE      # container bridge
 # ---- HELPERS ----
 # pick a template from all storage locations
 pick_template() {
-    local STORAGE_DIRS
-    local TEMPLATES=()
-    local CHOICE
-
-    # Get all directories under /var/lib/vz/template
-    STORAGE_DIRS=(/var/lib/vz/template/*)
-
-    # Collect template files
-    for dir in "${STORAGE_DIRS[@]}"; do
-        # Expand glob safely
-        local files=( "$dir"/*.tar "$dir"/*.tar.gz "$dir"/*.tar.zst "$dir"/*.tar.xz )
-        for tmpl in "${files[@]}"; do
-            [ -f "$tmpl" ] && TEMPLATES+=("$tmpl")
-        done
-    done
-
-    # Exit if no templates found
-    if [ ${#TEMPLATES[@]} -eq 0 ]; then
-        echo "No templates found in any storage."
-        exit 1
-    fi
-
-    # Display numbered list for user
-    echo "Available templates:"
-    for i in "${!TEMPLATES[@]}"; do
-        printf "  %2d) %s\n" "$((i+1))" "$(basename "${TEMPLATES[i]}")"
-    done
-
-    # Ask user to choose
-    while :; do
-        read -rp "Select a template number: " CHOICE
-        if [[ "$CHOICE" =~ ^[0-9]+$ ]] && [ "$CHOICE" -ge 1 ] && [ "$CHOICE" -le "${#TEMPLATES[@]}" ]; then
-            break
-        fi
-        echo "Invalid selection, try again."
-    done
-
-    # Set TEMPLATE variable with full path
-    TEMPLATE="${TEMPLATES[$((CHOICE-1))]}"
-    echo "Selected template: $TEMPLATE"
 }
 
 # ---- Gather Input ----
