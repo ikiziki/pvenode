@@ -36,7 +36,9 @@ pick_template() {
 
     # Collect template files
     for dir in "${STORAGE_DIRS[@]}"; do
-        for tmpl in "$dir"/*.{tar,tar.gz,tar.zst,tar.xz} 2>/dev/null; do
+        # Expand glob safely
+        local files=( "$dir"/*.tar "$dir"/*.tar.gz "$dir"/*.tar.zst "$dir"/*.tar.xz )
+        for tmpl in "${files[@]}"; do
             [ -f "$tmpl" ] && TEMPLATES+=("$tmpl")
         done
     done
