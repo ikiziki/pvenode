@@ -96,11 +96,11 @@ done
 info "Step 5: Discovering templates..."
 
 mapfile -t ALL_STORAGES < <(pvesm status | tail -n +2 | awk '{print $1}')
-declare -A STORAGE_TEMPLATES
+declare -A STORAGE_TEMPLATES=()
 for st in "${ALL_STORAGES[@]}"; do
   content_types=$(pvesm status --storage "$st" 2>/dev/null | awk 'NR>1 {print $2}')
   if [[ "$content_types" == *"vztmpl"* ]]; then
-    templates=$(pvesm list "$st" 2>/dev/null | awk '$2=="vztmpl" {print $1}')
+    templates=$(pvesm list "$st" 2>/dev/null | awk '$3=="vztmpl" {print $1}')
     [[ -n "$templates" ]] && STORAGE_TEMPLATES["$st"]="$templates"
   fi
 done
