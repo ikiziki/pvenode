@@ -95,28 +95,25 @@ done
 # ---- Step 5: Template discovery ----
 info "Step 5: Discovering templates..."
 
-# Ensure jq is present
-if ! command -v jq >/dev/null 2>&1; then
-  warn "jq not found. Installing..."
-  apt-get update -qq
-  apt-get install -y jq >/dev/null 2>&1
-  success "jq installed."
-fi
-
 mapfile -t ALL_STORAGES < <(pvesm status | tail -n +2 | awk '{print $1}')
 declare -A STORAGE_TEMPLATES
 for st in "${ALL_STORAGES[@]}"; do
-  templates=$(pvesh get /nodes/"$NODE"/storage/"$st"/content 2>/dev/null \
-    | jq -r '.[] | select(.content=="vztmpl") | .volid' 2>/dev/null)
-  [[ -n "$templates" ]] && STORAGE_TEMPLATES["$st"]="$templates"
+  content_types=$(pvesm status --storage "$st" 2>/dev/null | awk 'NR>1 {print $2}')
+  if [[ "$content_types" == *"vztmpl"* ]]; then
+    templates=$(pvesm list "$st" 2>/dev/null | awk '$2=="vztmpl" {print $1}')
+    [[ -n "$templates" ]] && STORAGE_TEMPLATES["$st"]="$templates"
+  fi
 done
+
+if [[ ${#STORAGE_TEMPLATES[@]} -eq 0 ]]; then
+  error "No LXC templates found in any storage."
+  exit 1
+fi
 
 mapfile -t TEMPLATE_STS < <(for k in "${!STORAGE_TEMPLATES[@]}"; do echo "$k"; done)
 CHOSEN_ST=$(choose "Select storage that contains templates:" "${TEMPLATE_STS[@]}")
 
-# Properly split template list into an array
 mapfile -t tmpl_options < <(echo "${STORAGE_TEMPLATES[$CHOSEN_ST]}" | tr ' ' '\n' | sed '/^$/d')
-
 CHOSEN_TEMPLATE=$(choose "Select template:" "${tmpl_options[@]}")
 
 # ---- Step 6: Disk storage ----
