@@ -31,7 +31,7 @@ pick_template() {
 
     # Get all template images across all storages
     mapfile -t TEMPLATE_LIST < <(
-        for STORAGE in $(pvesm status -content vz | awk 'NR>1 {print $1}'); do
+        for STORAGE in $(pvesm status -content vztmpl | awk 'NR>1 {print $1}'); do
             pvesm list "$STORAGE" --content vztmpl 2>/dev/null | awk -v st="$STORAGE" '{print st "/" $1}'
         done
     )
