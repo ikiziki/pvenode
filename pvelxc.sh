@@ -27,7 +27,7 @@ choose() {
     for i in "${!options[@]}"; do
       printf "  %2d) %s\n" $((i+1)) "${options[$i]}"
     done
-    read -rp "Choose [1-${#options[@]}]: " choice
+    read -rp "Choose [1-${#options[@]}] (${options[*]}): " choice
     if [[ "$choice" =~ ^[0-9]+$ ]] && (( choice>=1 && choice<=${#options[@]} )); then
       echo "${options[$((choice-1))]}"
       return 0
@@ -94,9 +94,13 @@ done
 
 # ---- Step 5: Template discovery ----
 info "Step 5: Discovering templates..."
+
+# Ensure jq is present
 if ! command -v jq >/dev/null 2>&1; then
-  error "jq is required for template discovery."
-  exit 1
+  warn "jq not found. Installing..."
+  apt-get update -qq
+  apt-get install -y jq
+  success "jq installed."
 fi
 
 mapfile -t ALL_STORAGES < <(pvesm status | tail -n +2 | awk '{print $1}')
