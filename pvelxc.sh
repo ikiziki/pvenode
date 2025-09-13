@@ -99,7 +99,7 @@ info "Step 5: Discovering templates..."
 if ! command -v jq >/dev/null 2>&1; then
   warn "jq not found. Installing..."
   apt-get update -qq
-  apt-get install -y jq
+  apt-get install -y jq >/dev/null 2>&1
   success "jq installed."
 fi
 
@@ -113,7 +113,10 @@ done
 
 mapfile -t TEMPLATE_STS < <(for k in "${!STORAGE_TEMPLATES[@]}"; do echo "$k"; done)
 CHOSEN_ST=$(choose "Select storage that contains templates:" "${TEMPLATE_STS[@]}")
-mapfile -t tmpl_options < <(echo "${STORAGE_TEMPLATES[$CHOSEN_ST]}")
+
+# Properly split template list into an array
+mapfile -t tmpl_options < <(echo "${STORAGE_TEMPLATES[$CHOSEN_ST]}" | tr ' ' '\n' | sed '/^$/d')
+
 CHOSEN_TEMPLATE=$(choose "Select template:" "${tmpl_options[@]}")
 
 # ---- Step 6: Disk storage ----
