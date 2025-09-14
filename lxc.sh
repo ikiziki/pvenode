@@ -24,34 +24,42 @@ declare MAC         # container MAC address
 declare PRIVLEVEL   # container privilege level
 declare BRIDGE      # container bridge
 
-# ---- HELPERS ----
 # ---- Gather Input ----
 setup() {
-	echo "===== Set Host Specifications ====="
-	read -p "Enter hostname (eg. skynet)" HOSTNAME
-	read -p "Enter core count (eg. 2)" CORECOUNT
-	read -p "Enter memory (eg. 2048)" MEMORY
-	read -p "Enter disk size (eg. 30)" STORAGE
+    echo -e "${CYAN}${DIVIDER}${RESET}"
+    echo -e "${CYAN}===== Set Host Specifications =====${RESET}"
+    echo -e "${CYAN}${DIVIDER}${RESET}"
+    
+    read -p "$(echo -e ${YELLOW}Enter hostname (eg. skynet) : ${RESET})" HOSTNAME
+    read -p "$(echo -e ${YELLOW}Enter core count (eg. 2) : ${RESET})" CORECOUNT
+    read -p "$(echo -e ${YELLOW}Enter memory (eg. 2048) : ${RESET})" MEMORY
+    read -p "$(echo -e ${YELLOW}Enter disk size (eg. 30) : ${RESET})" STORAGE
+
+    echo -e "${GREEN}Host specifications saved!${RESET}"
 }
 
 # pick a template from all storage locations
 pick_template() {
-	echo "TEMPLATE"
+    echo -e "${BLUE}${DIVIDER}${RESET}"
+    echo -e "${BLUE}Picking template...${RESET}"
 }
 
 # pick a rootfs storage location
 pick_storage() {
-	echo "STORAGE"
+    echo -e "${BLUE}${DIVIDER}${RESET}"
+    echo -e "${BLUE}Picking storage location...${RESET}"
 }
 
 # ---- Create LXC ---- 
 create() {
-	echo "CREATE"
+    echo -e "${BLUE}${DIVIDER}${RESET}"
+    echo -e "${BLUE}Creating LXC container...${RESET}"
 }
 
 # ---- Clean up ----
 cleanup() {
-	echo "CLEANUP"
+    echo -e "${BLUE}${DIVIDER}${RESET}"
+    echo -e "${BLUE}Cleaning up temporary files...${RESET}"
 }
 
 # ---- Main thread ----
