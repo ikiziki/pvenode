@@ -39,6 +39,27 @@ setup() {
     echo -e "${GREEN}Host specifications saved!${RESET}"
 }
 
+# set a root password
+set_pw() {
+    local pw1 pw2
+
+    while true; do
+        # -s hides input
+        read -s -p "$(echo -e "${YELLOW}Enter root password: ${RESET}")" pw1
+        echo
+        read -s -p "$(echo -e "${YELLOW}Confirm root password: ${RESET}")" pw2
+        echo
+
+        if [[ "$pw1" == "$pw2" && -n "$pw1" ]]; then
+            ROOTPW="$pw1"
+            echo -e "${GREEN}Password set successfully!${RESET}"
+            break
+        else
+            echo -e "${RED}Passwords do not match or are empty, try again.${RESET}"
+        fi
+    done
+}
+
 # pick a vm id 
 pick_vmid() {
     # List all existing VMIDs (LXC + QEMU)
@@ -163,6 +184,7 @@ pick_bridge() {
 create() {
     echo -e "${BLUE}${DIVIDER}${RESET}"
     echo -e "${BLUE}Creating LXC container...${RESET}"
+		set_pw
 }
 
 # ---- Clean up ----
