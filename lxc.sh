@@ -72,14 +72,14 @@ pick_vmid() {
 pick_template() {
     local templates=()
 
-    # Collect templates across all storages
+    # Collect templates only from storages that support vztmpl
     while read -r store _; do
         while read -r line; do
             local tmpl
-            tmpl=$(echo "$line" | awk '{print $1}')   # <-- first column is the filename
+            tmpl=$(echo "$line" | awk '{print $1}')   # first column is the filename
             [[ -n "$tmpl" ]] && templates+=("$store:$tmpl")
         done < <(pveam list "$store" | awk 'NR>1 {print}')
-    done < <(pvesm status | awk 'NR>1 {print $1}')
+    done < <(pvesm status | awk '$0 ~ /vztmpl/ {print $1}')
 
     # If none found, bail
     if [ ${#templates[@]} -eq 0 ]; then
