@@ -39,6 +39,33 @@ setup() {
     echo -e "${GREEN}Host specifications saved!${RESET}"
 }
 
+# pick a vm id 
+pick_vmid() {
+    # List all existing VMIDs (LXC + QEMU)
+    local used
+    used=$(pvesh get /cluster/resources --type vm --output-format=json | jq -r '.[].vmid')
+
+    # Find the next free VMID (starting from 100)
+    local vmid=100
+    while [[ " ${used[*]} " =~ " $vmid " ]]; do
+        ((vmid++))
+    done
+
+    # Offer the user a choice to override
+    echo -e "${YELLOW}Suggested next VMID is:${RESET} $vmid"
+    read -rp "$(echo -e ${YELLOW}Enter VMID to use (or press Enter to accept suggested): ${RESET})" input
+    if [[ -n "$input" ]]; then
+        if [[ " ${used[*]} " =~ " $input " ]]; then
+            echo -e "${YELLOW}Warning: VMID $input is already in use. Using suggested $vmid instead.${RESET}"
+        else
+            vmid=$input
+        fi
+    fi
+
+    VMID=$vmid
+    echo -e "${YELLOW}Using VMID:${RESET} $VMID"
+}
+
 # pick a template from all storage locations
 pick_template() {
     local templates=()
@@ -101,8 +128,32 @@ pick_storage() {
 
 # pick a network bridge for the new host
 pick_bridge() {
-	  echo -e "${BLUE}${DIVIDER}${RESET}"
-    echo -e "${BLUE}Picking network bridge...${RESET}"
+    local bridges=()
+
+    # Collect bridges (vmbr*) from network config
+    while read -r line; do
+        local name
+        name=$(echo "$line" | awk -F: '{print $1}')
+        [[ $name == vmbr* ]] && bridges+=("$name")
+    done < <(ip -o link show)
+
+    # If none found, bail
+    if [ ${#bridges[@]} -eq 0 ]; then
+        echo -e "${YELLOW}No bridges found.${RESET}" >&2
+        return 1
+    fi
+
+    # Menu
+    echo -e "${YELLOW}Select a network bridge:${RESET}"
+    select choice in "${bridges[@]}"; do
+        if [[ -n "$choice" ]]; then
+            BRIDGE="$choice"
+            echo -e "${YELLOW}You selected:${RESET} $BRIDGE"
+            return 0
+        else
+            echo -e "${YELLOW}Invalid selection${RESET}" >&2
+        fi
+    done
 }
 
 # ---- Create LXC ---- 
@@ -119,6 +170,7 @@ cleanup() {
 
 # ---- Main thread ----
 setup
+pick_vmid
 pick_template
 pick_storage
 pick_bridge
