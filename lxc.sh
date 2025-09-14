@@ -47,7 +47,7 @@ pick_template() {
     while read -r store _; do
         while read -r line; do
             local tmpl
-            tmpl=$(echo "$line" | awk '{print $2}')
+            tmpl=$(echo "$line" | awk '{print $1}')   # <-- first column is the filename
             [[ -n "$tmpl" ]] && templates+=("$store:$tmpl")
         done < <(pveam list "$store" | awk 'NR>1 {print}')
     done < <(pvesm status | awk 'NR>1 {print $1}')
