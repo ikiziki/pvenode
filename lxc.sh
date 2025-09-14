@@ -47,7 +47,7 @@ pick_vmid() {
 
     # Find the next free VMID (starting from 100)
     local vmid=100
-    while [[ " ${used[*]} " =~ " $vmid " ]]; do
+    while grep -qw "$vmid" <<< "$used"; do
         ((vmid++))
     done
 
@@ -56,11 +56,12 @@ pick_vmid() {
     read -rp $'\033[33mEnter VMID to use (or press Enter to accept suggested): \033[0m' input
 
     if [[ -n "$input" ]]; then
-        if [[ " ${used[*]} " =~ " $input " ]]; then
-            echo -e "${YELLOW}Warning: VMID $input is already in use. Using suggested $vmid instead.${RESET}"
-        else
-            vmid=$input
-        fi
+        # If user enters a VMID that is already in use, increment until free
+        while grep -qw "$input" <<< "$used"; do
+            echo -e "${YELLOW}VMID $input is already in use, incrementing...${RESET}"
+            ((input++))
+        done
+        vmid=$input
     fi
 
     VMID=$vmid
