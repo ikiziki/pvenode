@@ -30,7 +30,7 @@ setup() {
     echo -e "${CYAN}===== Set Host Specifications =====${RESET}"
     echo -e "${CYAN}${DIVIDER}${RESET}"
     
-    read -p "$(echo -e ${YELLOW}Enter hostname (eg. skynet) : ${RESET})" HOSTNAME
+    read -p "$(echo -e ${YELLOW}Enter host name (eg. skynet) : ${RESET})" HOSTNAME
     read -p "$(echo -e ${YELLOW}Enter core count (eg. 2) : ${RESET})" CORECOUNT
     read -p "$(echo -e ${YELLOW}Enter memory (eg. 2048) : ${RESET})" MEMORY
     read -p "$(echo -e ${YELLOW}Enter disk size (eg. 30) : ${RESET})" STORAGE
