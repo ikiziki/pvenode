@@ -132,10 +132,10 @@ pick_storage() {
 pick_bridge() {
     local bridges=()
 
-    # Collect bridges (vmbr*) from network config
+    # Collect bridges (vmbr*) from network interfaces
     while read -r line; do
         local name
-        name=$(echo "$line" | awk -F: '{print $1}')
+        name=$(echo "$line" | awk -F: '{print $2}' | xargs)  # strip spaces
         [[ $name == vmbr* ]] && bridges+=("$name")
     done < <(ip -o link show)
 
