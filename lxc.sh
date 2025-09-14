@@ -73,8 +73,36 @@ pick_template() {
 
 # pick a rootfs storage location
 pick_storage() {
-    echo -e "${BLUE}${DIVIDER}${RESET}"
-    echo -e "${BLUE}Picking storage location...${RESET}"
+    local storages=()
+
+    # Collect storage IDs from pvesm
+    while read -r store _; do
+        storages+=("$store")
+    done < <(pvesm status | awk 'NR>1 {print $1}')
+
+    # If none found, bail
+    if [ ${#storages[@]} -eq 0 ]; then
+        echo -e "${YELLOW}No storage locations found.${RESET}" >&2
+        return 1
+    fi
+
+    # Menu
+    echo -e "${YELLOW}Select a storage location:${RESET}"
+    select choice in "${storages[@]}"; do
+        if [[ -n "$choice" ]]; then
+            LOCATION="$choice"
+            echo -e "${YELLOW}You selected:${RESET} $LOCATION"
+            return 0
+        else
+            echo -e "${YELLOW}Invalid selection${RESET}" >&2
+        fi
+    done
+}
+
+# pick a network bridge for the new host
+pick_bridge() {
+	  echo -e "${BLUE}${DIVIDER}${RESET}"
+    echo -e "${BLUE}Picking network bridge...${RESET}"
 }
 
 # ---- Create LXC ---- 
@@ -93,5 +121,6 @@ cleanup() {
 setup
 pick_template
 pick_storage
+pick_bridge
 create
 cleanup
