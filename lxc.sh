@@ -259,7 +259,41 @@ create() {
 # ---- Clean up ----
 cleanup() {
     echo -e "${BLUE}${DIVIDER}${RESET}"
-    echo -e "${BLUE}Cleaning up temporary files...${RESET}"
+    echo -e "${BLUE}Running post-creation cleanup and configuration...${RESET}"
+
+    # Update and upgrade packages first
+    echo -e "${YELLOW}Running apt update and upgrade...${RESET}"
+    pct exec "$VMID" -- bash -c "apt update && apt upgrade -y"
+
+    # Modify SSH config to allow root login and password auth
+    echo -e "${YELLOW}Modifying SSH configuration...${RESET}"
+    pct exec "$VMID" -- bash -c "sed -i 's/^#\?PermitRootLogin .*/PermitRootLogin yes/' /etc/ssh/sshd_config"
+    pct exec "$VMID" -- bash -c "sed -i 's/^#\?PasswordAuthentication .*/PasswordAuthentication yes/' /etc/ssh/sshd_config"
+    pct exec "$VMID" -- systemctl restart sshd
+
+    # Clear /etc/update-motd.d/
+    echo -e "${YELLOW}Clearing /etc/update-motd.d/ ...${RESET}"
+    pct exec "$VMID" -- bash -c "rm -rf /etc/update-motd.d/*"
+
+    # Ask user if they want Docker installed
+    read -rp "$(echo -e ${YELLOW}Do you want to install Docker and Docker Compose? [y/N]: ${RESET})" install_docker
+    if [[ "$install_docker" =~ ^[Yy]$ ]]; then
+        echo -e "${YELLOW}Installing Docker and Docker Compose...${RESET}"
+        pct exec "$VMID" -- bash -c "apt install -y apt-transport-https ca-certificates curl gnupg lsb-release"
+        pct exec "$VMID" -- bash -c "curl -fsSL https://download.docker.com/linux/$(. /etc/os-release && echo "$ID")/gpg | gpg --dearmor -o /usr/share/keyrings/docker-archive-keyring.gpg"
+        pct exec "$VMID" -- bash -c "echo \"deb [arch=$(dpkg --print-architecture) signed-by=/usr/share/keyrings/docker-archive-keyring.gpg] https://download.docker.com/linux/$(. /etc/os-release && echo "$ID") $(lsb_release -cs) stable\" > /etc/apt/sources.list.d/docker.list"
+        pct exec "$VMID" -- bash -c "apt update && apt install -y docker-ce docker-ce-cli containerd.io docker-compose-plugin"
+        pct exec "$VMID" -- systemctl enable docker --now
+        echo -e "${GREEN}Docker and Docker Compose installed successfully.${RESET}"
+    fi
+
+    # Print the MAC address of the container
+    echo -e "${YELLOW}Fetching container MAC address...${RESET}"
+    local mac
+    mac=$(pct config "$VMID" | awk '/net0/ {print $2}' | sed 's/^.*hwaddr=//')
+    echo -e "${GREEN}Container $VMID MAC address: ${RESET}$mac"
+
+    echo -e "${GREEN}Cleanup and post-configuration complete.${RESET}"
 }
 
 # ---- Main thread ----
