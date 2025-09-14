@@ -183,8 +183,77 @@ pick_bridge() {
 # ---- Create LXC ---- 
 create() {
     echo -e "${BLUE}${DIVIDER}${RESET}"
-    echo -e "${BLUE}Creating LXC container...${RESET}"
-		set_pw
+    echo -e "${BLUE}Preparing to create LXC container...${RESET}"
+
+    # Prompt for root password
+    set_pw
+
+    # Prompt for privilege level
+    while true; do
+        read -rp "$(echo -e "${YELLOW}Container type? (p=privileged / u=unprivileged) : ${RESET}")" choice
+        case "$choice" in
+            p|P)
+                PRIVLEVEL="privileged"
+                UNPRIV="0"
+                break
+                ;;
+            u|U)
+                PRIVLEVEL="unprivileged"
+                UNPRIV="1"
+                break
+                ;;
+            *)
+                echo -e "${RED}Invalid choice. Enter 'p' or 'u'.${RESET}"
+                ;;
+        esac
+    done
+
+    # Extract storage and template filename
+    local store tmpl_file
+    store="${TEMPLATE%%:*}"       # before the colon
+    tmpl_file="${TEMPLATE#*:}"    # after the colon
+
+    # Pretty print configuration
+    echo -e "${CYAN}${DIVIDER}${RESET}"
+    echo -e "${CYAN}Container Configuration:${RESET}"
+    echo -e "${CYAN}${DIVIDER}${RESET}"
+    echo -e "${YELLOW}VMID: ${RESET}$VMID"
+    echo -e "${YELLOW}Hostname: ${RESET}$HOSTNAME"
+    echo -e "${YELLOW}Cores: ${RESET}$CORECOUNT"
+    echo -e "${YELLOW}Memory: ${RESET}$MEMORY MB"
+    echo -e "${YELLOW}Disk: ${RESET}$STORAGE GB"
+    echo -e "${YELLOW}Storage: ${RESET}$store"
+    echo -e "${YELLOW}Template: ${RESET}$tmpl_file"
+    echo -e "${YELLOW}Bridge: ${RESET}$BRIDGE"
+    echo -e "${YELLOW}Type: ${RESET}$PRIVLEVEL"
+    echo -e "${CYAN}${DIVIDER}${RESET}"
+
+    # Confirm
+    read -rp "$(echo -e "${YELLOW}Create this container? (y/n): ${RESET}")" confirm
+    if [[ ! "$confirm" =~ ^[Yy]$ ]]; then
+        echo -e "${RED}Container creation cancelled.${RESET}"
+        return 1
+    fi
+
+    # Create LXC container
+    pct create "$VMID" "$store:$tmpl_file" \
+        --hostname "$HOSTNAME" \
+        --cores "$CORECOUNT" \
+        --memory "$MEMORY" \
+        --rootfs "${STORAGE}G" \
+        --net0 name=eth0,bridge="$BRIDGE",ip=dhcp \
+        --password "$ROOTPW" \
+        --unprivileged "$UNPRIV" \
+        --features nesting=1 \
+        --onboot 1
+
+    if [[ $? -eq 0 ]]; then
+        echo -e "${GREEN}Container $VMID created successfully!${RESET}"
+        pct start "$VMID"
+        echo -e "${GREEN}Container started.${RESET}"
+    else
+        echo -e "${RED}Failed to create container.${RESET}"
+    fi
 }
 
 # ---- Clean up ----
