@@ -53,7 +53,8 @@ pick_vmid() {
 
     # Offer the user a choice to override
     echo -e "${YELLOW}Suggested next VMID is:${RESET} $vmid"
-    read -rp "$(echo -e ${YELLOW}Enter VMID to use (or press Enter to accept suggested): ${RESET})" input
+    read -rp $'\033[33mEnter VMID to use (or press Enter to accept suggested): \033[0m' input
+
     if [[ -n "$input" ]]; then
         if [[ " ${used[*]} " =~ " $input " ]]; then
             echo -e "${YELLOW}Warning: VMID $input is already in use. Using suggested $vmid instead.${RESET}"
