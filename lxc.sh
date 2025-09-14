@@ -105,14 +105,14 @@ pick_template() {
 pick_storage() {
     local storages=()
 
-    # Collect storage IDs from pvesm
+    # Collect storages that support rootdir
     while read -r store _; do
         storages+=("$store")
-    done < <(pvesm status | awk 'NR>1 {print $1}')
+    done < <(pvesm status --content rootdir 2>/dev/null | awk 'NR>1 {print $1}')
 
     # If none found, bail
     if [ ${#storages[@]} -eq 0 ]; then
-        echo -e "${YELLOW}No storage locations found.${RESET}" >&2
+        echo -e "${YELLOW}No storage locations with rootdir support found.${RESET}" >&2
         return 1
     fi
 
