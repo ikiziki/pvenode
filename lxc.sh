@@ -41,34 +41,52 @@ setup() {
 
 # pick a template from all storage locations
 pick_template() {
-    echo -e "${BLUE}${DIVIDER}${RESET}"
-    echo -e "${BLUE}Picking template...${RESET}"
-    # Placeholder logic
-    echo -e "${GREEN}Template selected: TEMPLATE_PLACEHOLDER${RESET}"
+    local templates=()
+
+    # Collect templates across all storages
+    while read -r store _; do
+        while read -r line; do
+            local tmpl
+            tmpl=$(echo "$line" | awk '{print $2}')
+            [[ -n "$tmpl" ]] && templates+=("$store:$tmpl")
+        done < <(pveam list "$store" | awk 'NR>1 {print}')
+    done < <(pvesm status | awk 'NR>1 {print $1}')
+
+    # If none found, bail
+    if [ ${#templates[@]} -eq 0 ]; then
+        echo -e "${YELLOW}No LXC templates found.${RESET}" >&2
+        return 1
+    fi
+
+    # Menu
+    echo -e "${YELLOW}Select an LXC template:${RESET}"
+    select choice in "${templates[@]}"; do
+        if [[ -n "$choice" ]]; then
+            TEMPLATE="$choice"
+            echo -e "${YELLOW}You selected:${RESET} $TEMPLATE"
+            return 0
+        else
+            echo -e "${YELLOW}Invalid selection${RESET}" >&2
+        fi
+    done
 }
 
 # pick a rootfs storage location
 pick_storage() {
     echo -e "${BLUE}${DIVIDER}${RESET}"
     echo -e "${BLUE}Picking storage location...${RESET}"
-    # Placeholder logic
-    echo -e "${GREEN}Storage location selected: STORAGE_PLACEHOLDER${RESET}"
 }
 
 # ---- Create LXC ---- 
 create() {
     echo -e "${BLUE}${DIVIDER}${RESET}"
     echo -e "${BLUE}Creating LXC container...${RESET}"
-    # Placeholder logic
-    echo -e "${GREEN}Container created successfully!${RESET}"
 }
 
 # ---- Clean up ----
 cleanup() {
     echo -e "${BLUE}${DIVIDER}${RESET}"
     echo -e "${BLUE}Cleaning up temporary files...${RESET}"
-    # Placeholder logic
-    echo -e "${GREEN}Cleanup complete!${RESET}"
 }
 
 # ---- Main thread ----
