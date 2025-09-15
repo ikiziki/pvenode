@@ -94,14 +94,12 @@ pick_vmid() {
 pick_template() {
     local templates=()
     local display_names=()
-    local store line tmpl_full tmpl_file
+    local store type content line tmpl_full tmpl_file
 
     # Loop through all storage pools
-    while read -r store _; do
+    while read -r store type content; do
         # Only consider storages that support LXC templates
-        storage_type=$(pvesm status "$store" | awk 'NR==2 {print $2}')
-        storage_content=$(pvesm status "$store" | awk 'NR==2 {print $3}')
-        [[ "$storage_content" != *vztmpl* ]] && continue
+        [[ "$content" != *vztmpl* ]] && continue
 
         # List templates on this storage
         while read -r line; do
@@ -111,7 +109,7 @@ pick_template() {
             templates+=("$store:$tmpl_file")
             display_names+=("${tmpl_full##*/}")
         done < <(pveam list "$store" 2>/dev/null | awk 'NR>1 {print}')
-    done < <(pvesm status | awk 'NR>1 {print $1}')
+    done < <(pvesm status | awk 'NR>1 {print $1, $2, $3}')
 
     if [ ${#templates[@]} -eq 0 ]; then
         echo -e "${RED}No LXC templates found in storage.${RESET}" >&2
