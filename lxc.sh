@@ -22,7 +22,7 @@ declare MEMORY      # Container memory (MB)
 declare ROOTPW      # Container root password
 declare STORAGE     # Container rootfs size (GB)
 declare LOCATION    # Container rootfs location
-declare TEMPLATE    # Container image template (STORAGE:TEMPLATE_FILENAME)
+declare TEMPLATE    # Container image template (STORAGE:vztmpl/filename.tar.zst)
 declare MAC         # Container MAC address
 declare PRIVLEVEL   # Container privilege level
 declare BRIDGE      # Container network bridge
@@ -86,22 +86,24 @@ pick_vmid() {
     echo -e "${YELLOW}Using VMID:${RESET} $VMID"
 }
 
+# ==============================
+# Template Selection
+# ==============================
 pick_template() {
-    local templates=()       # STORAGE:TEMPLATE_FILENAME
+    local templates=()       # STORAGE:vztmpl/filename.tar.zst
     local display_names=()   # Menu names
     local store line tmpl_full tmpl_file
 
     # Iterate storages
     while read -r store _; do
         while read -r line; do
-            tmpl_full=$(echo "$line" | awk '{print $1}')   # raw output, e.g., 'vztmpl/debian-12-standard_12.7-1_amd64.tar.zst'
+            tmpl_full=$(echo "$line" | awk '{print $1}')   # e.g., 'vztmpl/debian-12-standard_12.7-1_amd64.tar.zst'
             [[ -z "$tmpl_full" ]] && continue
 
-            # Strip 'vztmpl/' prefix completely
-            tmpl_file="${tmpl_full##*/}"   # removes everything before last /
-
-            templates+=("$store:$tmpl_file")       # what pct expects
-            display_names+=("$tmpl_file")          # menu display
+            # Keep full path for Proxmox, display clean filename
+            tmpl_file="$tmpl_full"
+            templates+=("$store:$tmpl_file")
+            display_names+=("${tmpl_full##*/}")  # strip path for menu
         done < <(pveam list "$store" 2>/dev/null | awk 'NR>1 {print}')
     done < <(pvesm status | awk 'NR>1 {print $1}')
 
@@ -115,7 +117,7 @@ pick_template() {
         if [[ -n "$choice" ]]; then
             for i in "${!display_names[@]}"; do
                 if [[ "${display_names[i]}" == "$choice" ]]; then
-                    TEMPLATE="${templates[i]}"
+                    TEMPLATE="${templates[i]}"   # STORAGE:vztmpl/filename.tar.zst
                     break
                 fi
             done
@@ -199,11 +201,6 @@ create() {
         esac
     done
 
-    # Split TEMPLATE into storage and filename
-    local tmpl_store tmpl_file
-    tmpl_store="${TEMPLATE%%:*}"
-    tmpl_file="${TEMPLATE#*:}"
-
     echo -e "${CYAN}${DIVIDER}${RESET}"
     echo -e "${CYAN}Container Configuration:${RESET}"
     echo -e "${CYAN}${DIVIDER}${RESET}"
@@ -213,7 +210,7 @@ create() {
     echo -e "${YELLOW}Memory:   ${RESET}$MEMORY MB"
     echo -e "${YELLOW}Disk:     ${RESET}$STORAGE GB"
     echo -e "${YELLOW}Storage:  ${RESET}$LOCATION"
-    echo -e "${YELLOW}Template: ${RESET}$tmpl_file"
+    echo -e "${YELLOW}Template: ${RESET}$TEMPLATE"
     echo -e "${YELLOW}Bridge:   ${RESET}$BRIDGE"
     echo -e "${YELLOW}Type:     ${RESET}$PRIVLEVEL"
     echo -e "${CYAN}${DIVIDER}${RESET}"
@@ -221,7 +218,8 @@ create() {
     read -rp "$(echo -e "${YELLOW}Create this container? (y/n): ${RESET}")" confirm
     [[ ! "$confirm" =~ ^[Yy]$ ]] && { echo -e "${RED}Cancelled.${RESET}"; return 1; }
 
-    pct create "$VMID" "$tmpl_store:$tmpl_file" \
+    # pct create using STORAGE:vztmpl/filename.tar.zst
+    pct create "$VMID" "$TEMPLATE" \
         --hostname "$HOSTNAME" \
         --cores "$CORECOUNT" \
         --memory "$MEMORY" \
