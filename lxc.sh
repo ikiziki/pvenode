@@ -88,10 +88,10 @@ template() {
     # Gather templates from all storages that support vztmpl
     for store in $(pvesm status --content vztmpl | awk 'NR>1 {print $1}'); do
         while read -r line; do
-            tmpl_file=$(echo "$line" | awk '{print $2}')
+            tmpl_file=$(echo "$line" | awk '{print $1}')  # <-- first column = template name
             if [[ -n "$tmpl_file" ]]; then
                 templates+=("$store:$tmpl_file")
-                # Strip extension for display (keep only the name)
+                # Strip extension for display
                 tmpl_name=$(basename "$tmpl_file")
                 tmpl_name="${tmpl_name%%.*}"
                 display+=("$store:$tmpl_name")
@@ -110,6 +110,7 @@ template() {
 
     echo "Selected TEMPLATE: $TEMPLATE"
 }
+
 
 
 
