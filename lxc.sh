@@ -83,19 +83,24 @@ template() {
     echo "Available container templates on this host:"
 
     templates=()
+    display=()
     # Gather templates from all storages that support vztmpl
     for store in $(pvesm status --content vztmpl | awk 'NR>1 {print $1}'); do
         while read -r line; do
-            tmpl=$(echo "$line" | awk '{print $2}')
-            if [[ -n "$tmpl" ]]; then
-                templates+=("$store:$tmpl")
+            tmpl_file=$(echo "$line" | awk '{print $2}')
+            if [[ -n "$tmpl_file" ]]; then
+                templates+=("$store:$tmpl_file")
+                # For display, strip extensions
+                tmpl_name=$(basename "$tmpl_file")
+                tmpl_name="${tmpl_name%%.*}"
+                display+=("$store:$tmpl_name")
             fi
         done < <(pveam list "$store" | awk 'NR>1')
     done
 
-    # Show list
-    for i in "${!templates[@]}"; do
-        echo "[$i] ${templates[$i]}"
+    # Show list with clean names
+    for i in "${!display[@]}"; do
+        echo "[$i] ${display[$i]}"
     done
 
     # Prompt user
