@@ -83,23 +83,22 @@ template() {
     echo "Scanning available container templates on this host:"
 
     templates=()
+    template_storage=()
     display=()
     
-    # Gather templates from all storages that support vztmpl
     for store in $(pvesm status --content vztmpl | awk 'NR>1 {print $1}'); do
         while read -r line; do
-            tmpl_file=$(echo "$line" | awk '{print $1}')  # <-- first column = template name
+            tmpl_file=$(echo "$line" | awk '{print $1}')  # first column = template name
             if [[ -n "$tmpl_file" ]]; then
-                templates+=("$store:$tmpl_file")
-                # Strip extension for display
-                tmpl_name=$(basename "$tmpl_file")
-                tmpl_name="${tmpl_name%%.*}"
-                display+=("$store:$tmpl_name")
+                templates+=("$tmpl_file")                   # template filename only
+                template_storage+=("$store")                # storage where the template is
+                tmpl_name="${tmpl_file%%.*}"               # strip extension for display
+                display+=("$store:$tmpl_name")             # display with storage
             fi
         done < <(pveam list "$store" | awk 'NR>1')
     done
 
-    # Show list with clean names
+    # Show list
     for i in "${!display[@]}"; do
         echo "[$i] ${display[$i]}"
     done
@@ -107,11 +106,10 @@ template() {
     # Prompt user
     read -p "Select a template number: " choice
     TEMPLATE="${templates[$choice]}"
+    TEMPLATE_STORAGE="${template_storage[$choice]}"
 
-    echo "Selected TEMPLATE: $TEMPLATE"
+    echo "Selected TEMPLATE: $TEMPLATE (Storage: $TEMPLATE_STORAGE)"
 }
-
-
 
 
 # pick a network bridge
