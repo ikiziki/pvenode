@@ -86,25 +86,22 @@ pick_vmid() {
     echo -e "${YELLOW}Using VMID:${RESET} $VMID"
 }
 
-# ==============================
-# Template Selection
-# ==============================
 pick_template() {
     local templates=()       # STORAGE:TEMPLATE_FILENAME
     local display_names=()   # Menu names
-    local store line tmpl_full tmpl_name
+    local store line tmpl_full tmpl_file
 
     # Iterate storages
     while read -r store _; do
         while read -r line; do
-            tmpl_full=$(echo "$line" | awk '{print $1}')   # e.g., 'vztmpl/debian-12-standard_12.7-1_amd64.tar.zst'
-            [[ -n "$tmpl_full" ]] || continue
+            tmpl_full=$(echo "$line" | awk '{print $1}')   # raw output, e.g., 'vztmpl/debian-12-standard_12.7-1_amd64.tar.zst'
+            [[ -z "$tmpl_full" ]] && continue
 
-            # Strip 'vztmpl/' for Proxmox pct
-            tmpl_name="${tmpl_full#vztmpl/}"
+            # Strip 'vztmpl/' prefix completely
+            tmpl_file="${tmpl_full##*/}"   # removes everything before last /
 
-            templates+=("$store:$tmpl_name")       # what pct create expects
-            display_names+=("$tmpl_name")          # menu display
+            templates+=("$store:$tmpl_file")       # what pct expects
+            display_names+=("$tmpl_file")          # menu display
         done < <(pveam list "$store" 2>/dev/null | awk 'NR>1 {print}')
     done < <(pvesm status | awk 'NR>1 {print $1}')
 
@@ -118,7 +115,7 @@ pick_template() {
         if [[ -n "$choice" ]]; then
             for i in "${!display_names[@]}"; do
                 if [[ "${display_names[i]}" == "$choice" ]]; then
-                    TEMPLATE="${templates[i]}"   # STORAGE:TEMPLATE_FILENAME
+                    TEMPLATE="${templates[i]}"
                     break
                 fi
             done
