@@ -10,7 +10,6 @@ BLUE="\e[34m"
 CYAN="\e[36m"
 RESET="\e[0m"
 
-# Divider line
 DIVIDER="======================================"
 
 # ==============================
@@ -27,6 +26,7 @@ declare TEMPLATE    # Container image template
 declare MAC         # Container MAC address
 declare PRIVLEVEL   # Container privilege level
 declare BRIDGE      # Container network bridge
+declare UNPRIV      # Unprivileged flag
 
 # ==============================
 # Host Setup
@@ -97,7 +97,7 @@ pick_template() {
     # Iterate storages with LXC templates
     while read -r store _; do
         while read -r line; do
-            tmpl_file=$(echo "$line" | awk '{print $1}')  # keep full filename
+            tmpl_file=$(echo "$line" | awk '{print $1}')       # full filename
             [[ -n "$tmpl_file" ]] && templates+=("$store:${tmpl_file#vztmpl/}") && display_names+=("${tmpl_file#vztmpl/}")
         done < <(pveam list "$store" 2>/dev/null | awk 'NR>1 {print}')
     done < <(pvesm status | awk 'NR>1 {print $1}')
@@ -123,7 +123,6 @@ pick_template() {
         fi
     done
 }
-
 
 # ==============================
 # Storage Selection
