@@ -220,11 +220,15 @@ create() {
     read -rp "$(echo -e "${YELLOW}Create this container? (y/n): ${RESET}")" confirm
     [[ ! "$confirm" =~ ^[Yy]$ ]] && { echo -e "${RED}Cancelled.${RESET}"; return 1; }
 
+    # Fix rootfs syntax: replace any slashes with colon
+    ROOTFS="${LOCATION//\//:}:${STORAGE}G"
+    echo -e "${YELLOW}Creating rootfs: ${RESET}$ROOTFS"
+
     pct create "$VMID" "$TEMPLATE_PATH" \
         --hostname "$HOSTNAME" \
         --cores "$CORECOUNT" \
         --memory "$MEMORY" \
-        --rootfs "$LOCATION:${STORAGE}G" \
+        --rootfs "$ROOTFS" \
         --net0 name=eth0,bridge="$BRIDGE",ip=dhcp \
         --password "$ROOTPW" \
         --unprivileged "$UNPRIV" \
