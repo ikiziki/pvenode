@@ -1,11 +1,13 @@
 #!/usr/bin/env bash
 # A streamlined LXC creation script for Proxmox VE
 
+
 declare VMID
 declare HOSTNAME
 declare CORES
 declare MEMORY
 declare DISKSIZE
+
 
 # Function to gather basic setup info
 setup() {
@@ -14,6 +16,7 @@ setup() {
     read -p "Enter the amount of RAM (in MB): " MEMORY
     read -p "Enter the root disk size (in GB): " DISKSIZE
 }
+
 
 # Function to get and confirm VMID
 vmid() {
@@ -43,25 +46,52 @@ vmid() {
     fi
 }
 
+
 # pick a storage location for the container image
 storage() {
-    :
+    # Get available storage backends that support container images
+    options=($(pvesm status | awk '$2 ~ /dir|lvmthin|zfspool|btrfs|cephfs|rbd/ {print $1}'))
+
+    if [ ${#options[@]} -eq 0 ]; then
+        echo "No valid storage backends found for container images."
+        return 1
+    fi
+
+    echo "Available storage backends:"
+    for i in "${!options[@]}"; do
+        echo "$((i+1)). ${options[$i]}"
+    done
+
+    # Prompt user
+    read -p "Select storage [1-${#options[@]}]: " choice
+
+    if [[ "$choice" =~ ^[0-9]+$ ]] && [ "$choice" -ge 1 ] && [ "$choice" -le "${#options[@]}" ]; then
+        STORAGE="${options[$((choice-1))]}"
+        echo "Selected storage: $STORAGE"
+    else
+        echo "Invalid choice."
+        return 1
+    fi
 }
+
 
 # pick a template for the container
 template() {
     :
 }
 
+
 # pick a network bridge
 bridge() {
     :
 }
 
+
 # create the container
 create() {
     :
 }
+
 
 # configure the container
 config() {
@@ -78,6 +108,7 @@ storage
 bridge
 create
 config
+
 
 echo "LXC container $HOSTNAME created successfully!"
 echo "You can start it with: pct start $VMID"
