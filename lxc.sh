@@ -94,8 +94,8 @@ pick_template() {
     while read -r store _; do
         while read -r line; do
             local tmpl
-            # Strip everything up to last slash to get just the template filename
-            tmpl=$(echo "$line" | awk '{print $1}' | sed 's#^.*/##')
+            # Strip path and .tar.zst extension to get template alias
+            tmpl=$(echo "$line" | awk '{print $1}' | sed 's#^.*/##' | sed 's#\.tar\.zst$##')
             [[ -n "$tmpl" ]] && templates+=("$store:$tmpl")
         done < <(pveam list "$store" 2>/dev/null | awk 'NR>1 {print}')
     done < <(pvesm status | awk 'NR>1 {print $1}')
