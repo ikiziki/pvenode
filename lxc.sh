@@ -94,16 +94,15 @@ pick_template() {
     local display_names=()   # Menu names
     local store line tmpl_full tmpl_file
 
-    # Iterate storages
     while read -r store _; do
         while read -r line; do
             tmpl_full=$(echo "$line" | awk '{print $1}')   # e.g., 'vztmpl/debian-12-standard_12.7-1_amd64.tar.zst'
             [[ -z "$tmpl_full" ]] && continue
 
-            # Keep full path for Proxmox, display clean filename
+            # Keep full path for pct create; display clean filename
             tmpl_file="$tmpl_full"
             templates+=("$store:$tmpl_file")
-            display_names+=("${tmpl_full##*/}")  # strip path for menu
+            display_names+=("${tmpl_full##*/}")  # show filename only in menu
         done < <(pveam list "$store" 2>/dev/null | awk 'NR>1 {print}')
     done < <(pvesm status | awk 'NR>1 {print $1}')
 
@@ -218,7 +217,7 @@ create() {
     read -rp "$(echo -e "${YELLOW}Create this container? (y/n): ${RESET}")" confirm
     [[ ! "$confirm" =~ ^[Yy]$ ]] && { echo -e "${RED}Cancelled.${RESET}"; return 1; }
 
-    # pct create using STORAGE:vztmpl/filename.tar.zst
+    # pct create using quotes to preserve storage:path correctly
     pct create "$VMID" "$TEMPLATE" \
         --hostname "$HOSTNAME" \
         --cores "$CORECOUNT" \
