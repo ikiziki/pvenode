@@ -80,5 +80,5 @@ create
 config
 
 echo "LXC container $HOSTNAME created successfully!"
-echo "You can start it with: pct start <container_id>"
-echo "Access it with: pct enter <container_id>"
+echo "You can start it with: pct start $VMID"
+echo "Access it with: pct enter $VMID"
