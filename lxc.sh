@@ -80,17 +80,18 @@ storage() {
 
 # pick a template for the container
 template() {
-    echo "Available container templates on this host:"
+    echo "Scanning available container templates on this host:"
 
     templates=()
     display=()
+    
     # Gather templates from all storages that support vztmpl
     for store in $(pvesm status --content vztmpl | awk 'NR>1 {print $1}'); do
         while read -r line; do
             tmpl_file=$(echo "$line" | awk '{print $2}')
             if [[ -n "$tmpl_file" ]]; then
                 templates+=("$store:$tmpl_file")
-                # For display, strip extensions
+                # Strip extension for display (keep only the name)
                 tmpl_name=$(basename "$tmpl_file")
                 tmpl_name="${tmpl_name%%.*}"
                 display+=("$store:$tmpl_name")
@@ -109,6 +110,7 @@ template() {
 
     echo "Selected TEMPLATE: $TEMPLATE"
 }
+
 
 
 # pick a network bridge
