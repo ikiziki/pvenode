@@ -89,7 +89,7 @@ pick_vmid() {
 }
 
 # ==============================
-# Template Selection (Proxmox storage reference)
+# Template Selection (Proxmox storage or full path)
 # ==============================
 pick_template() {
     local templates=()
@@ -98,17 +98,29 @@ pick_template() {
 
     # Loop through all storage pools
     while read -r store type content; do
-        # Only consider storages that support LXC templates
-        [[ "$content" != *vztmpl* ]] && continue
+        # Only consider storages that could have templates (optional filter)
+        [[ "$content" != *vztmpl* && "$type" != "dir" ]] && continue
 
-        # List templates on this storage
-        while read -r line; do
-            tmpl_full=$(echo "$line" | awk '{print $1}')
-            [[ -z "$tmpl_full" ]] && continue
-            tmpl_file="$tmpl_full"
-            templates+=("$store:$tmpl_file")
-            display_names+=("${tmpl_full##*/}")
-        done < <(pveam list "$store" 2>/dev/null | awk 'NR>1 {print}')
+        # List templates via pveam if storage is template-capable
+        if [[ "$content" == *vztmpl* ]]; then
+            while read -r line; do
+                tmpl_full=$(echo "$line" | awk '{print $1}')
+                [[ -z "$tmpl_full" ]] && continue
+                tmpl_file="$tmpl_full"
+                templates+=("$store:$tmpl_file")
+                display_names+=("${tmpl_full##*/}")
+            done < <(pveam list "$store" 2>/dev/null | awk 'NR>1 {print}')
+        else
+            # For dir storage, scan vzdump folder
+            if [[ -d "/mnt/pve/$store/vztmpl" ]]; then
+                for tmpl_full in /mnt/pve/"$store"/vztmpl/*.tar.zst; do
+                    [[ ! -f "$tmpl_full" ]] && continue
+                    tmpl_file=$(basename "$tmpl_full")
+                    templates+=("$store|$tmpl_full")   # Use pipe to indicate full path
+                    display_names+=("$tmpl_file")
+                done
+            fi
+        fi
     done < <(pvesm status | awk 'NR>1 {print $1, $2, $3}')
 
     if [ ${#templates[@]} -eq 0 ]; then
@@ -122,10 +134,15 @@ pick_template() {
         if [[ -n "$choice" ]]; then
             for i in "${!display_names[@]}"; do
                 if [[ "${display_names[i]}" == "$choice" ]]; then
-                    TEMPLATE_STORAGE="${templates[i]%%:*}"
-                    TEMPLATE_FILE="${templates[i]#*:}"
-                    # Correct format for pct create
-                    TEMPLATE_PATH="${TEMPLATE_STORAGE}:vztmpl/${TEMPLATE_FILE}"
+                    if [[ "${templates[i]}" == *"|"* ]]; then
+                        # Full path for dir storage
+                        TEMPLATE_PATH="${templates[i]#*|}"
+                    else
+                        # Storage reference for template-capable storage
+                        TEMPLATE_STORAGE="${templates[i]%%:*}"
+                        TEMPLATE_FILE="${templates[i]#*:}"
+                        TEMPLATE_PATH="${TEMPLATE_STORAGE}:vztmpl/${TEMPLATE_FILE}"
+                    fi
                     break
                 fi
             done
@@ -136,6 +153,7 @@ pick_template() {
         fi
     done
 }
+
 
 # ==============================
 # Storage Selection
