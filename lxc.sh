@@ -22,7 +22,7 @@ declare MEMORY      # Container memory (MB)
 declare ROOTPW      # Container root password
 declare STORAGE     # Container rootfs size (GB)
 declare LOCATION    # Container rootfs location
-declare TEMPLATE    # Container image template
+declare TEMPLATE    # Container image template (STORAGE:TEMPLATE_FILENAME)
 declare MAC         # Container MAC address
 declare PRIVLEVEL   # Container privilege level
 declare BRIDGE      # Container network bridge
@@ -90,15 +90,21 @@ pick_vmid() {
 # Template Selection
 # ==============================
 pick_template() {
-    local templates=()
-    local display_names=()
-    local store line tmpl_file
+    local templates=()       # STORAGE:TEMPLATE_FILENAME
+    local display_names=()   # Menu names
+    local store line tmpl_full tmpl_name
 
-    # Iterate storages with LXC templates
+    # Iterate storages
     while read -r store _; do
         while read -r line; do
-            tmpl_file=$(echo "$line" | awk '{print $1}')       # full filename
-            [[ -n "$tmpl_file" ]] && templates+=("$store:${tmpl_file#vztmpl/}") && display_names+=("${tmpl_file#vztmpl/}")
+            tmpl_full=$(echo "$line" | awk '{print $1}')   # e.g., 'vztmpl/debian-12-standard_12.7-1_amd64.tar.zst'
+            [[ -n "$tmpl_full" ]] || continue
+
+            # Strip 'vztmpl/' for Proxmox pct
+            tmpl_name="${tmpl_full#vztmpl/}"
+
+            templates+=("$store:$tmpl_name")       # what pct create expects
+            display_names+=("$tmpl_name")          # menu display
         done < <(pveam list "$store" 2>/dev/null | awk 'NR>1 {print}')
     done < <(pvesm status | awk 'NR>1 {print $1}')
 
@@ -112,7 +118,7 @@ pick_template() {
         if [[ -n "$choice" ]]; then
             for i in "${!display_names[@]}"; do
                 if [[ "${display_names[i]}" == "$choice" ]]; then
-                    TEMPLATE="${templates[i]}"
+                    TEMPLATE="${templates[i]}"   # STORAGE:TEMPLATE_FILENAME
                     break
                 fi
             done
@@ -196,8 +202,9 @@ create() {
         esac
     done
 
-    local store tmpl_file
-    store="${TEMPLATE%%:*}"
+    # Split TEMPLATE into storage and filename
+    local tmpl_store tmpl_file
+    tmpl_store="${TEMPLATE%%:*}"
     tmpl_file="${TEMPLATE#*:}"
 
     echo -e "${CYAN}${DIVIDER}${RESET}"
@@ -215,12 +222,9 @@ create() {
     echo -e "${CYAN}${DIVIDER}${RESET}"
 
     read -rp "$(echo -e "${YELLOW}Create this container? (y/n): ${RESET}")" confirm
-    if [[ ! "$confirm" =~ ^[Yy]$ ]]; then
-        echo -e "${RED}Container creation cancelled.${RESET}"
-        return 1
-    fi
+    [[ ! "$confirm" =~ ^[Yy]$ ]] && { echo -e "${RED}Cancelled.${RESET}"; return 1; }
 
-    pct create "$VMID" "$store:$tmpl_file" \
+    pct create "$VMID" "$tmpl_store:$tmpl_file" \
         --hostname "$HOSTNAME" \
         --cores "$CORECOUNT" \
         --memory "$MEMORY" \
@@ -270,9 +274,8 @@ cleanup() {
     fi
 
     echo -e "${YELLOW}Fetching container MAC address...${RESET}"
-    local mac
-    mac=$(pct config "$VMID" | awk '/net0/ {print $2}' | sed 's/^.*hwaddr=//')
-    echo -e "${GREEN}Container $VMID MAC address: ${RESET}$mac"
+    MAC=$(pct config "$VMID" | awk '/net0/ {print $2}' | sed 's/^.*hwaddr=//')
+    echo -e "${GREEN}Container $VMID MAC address: ${RESET}$MAC"
 
     echo -e "${GREEN}Cleanup and post-configuration complete.${RESET}"
 }
