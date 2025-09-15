@@ -9,6 +9,7 @@ declare MEMORY
 declare DISKSIZE
 declare STORAGE
 declare BRIDGE
+declare TEMPLATE
 
 
 # Function to gather basic setup info
@@ -79,7 +80,29 @@ storage() {
 
 # pick a template for the container
 template() {
-    :
+    echo "Available container templates on this host:"
+
+    templates=()
+    # Gather templates from all storages that support vztmpl
+    for store in $(pvesm status --content vztmpl | awk 'NR>1 {print $1}'); do
+        while read -r line; do
+            tmpl=$(echo "$line" | awk '{print $2}')
+            if [[ -n "$tmpl" ]]; then
+                templates+=("$store:$tmpl")
+            fi
+        done < <(pveam list "$store" | awk 'NR>1')
+    done
+
+    # Show list
+    for i in "${!templates[@]}"; do
+        echo "[$i] ${templates[$i]}"
+    done
+
+    # Prompt user
+    read -p "Select a template number: " choice
+    TEMPLATE="${templates[$choice]}"
+
+    echo "Selected TEMPLATE: $TEMPLATE"
 }
 
 
@@ -141,3 +164,4 @@ echo "memory   : $MEMORY"
 echo "disk size: $DISKSIZE"
 echo "storage  : $STORAGE"
 echo "bridge   : $BRIDGE"
+echo "template : $TEMPLATE"
