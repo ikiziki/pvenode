@@ -93,7 +93,7 @@ template() {
                 templates+=("$tmpl_file")                   # template filename only
                 template_storage+=("$store")                # storage where the template is
                 tmpl_name="${tmpl_file%%.*}"               # strip extension for display
-                display+=("$store:$tmpl_name")             # display with storage
+                display+=("$tmpl_name")                     # display only template name
             fi
         done < <(pveam list "$store" | awk 'NR>1')
     done
