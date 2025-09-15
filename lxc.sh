@@ -94,15 +94,17 @@ bridge() {
         fi
     done
 
-    for br in "${bridges[@]}"; do
-        echo " - $br"
+    # show numbered list
+    for i in "${!bridges[@]}"; do
+        printf " [%d] %s\n" "$((i+1))" "${bridges[$i]}"
     done
 
     if [[ ${#bridges[@]} -eq 1 ]]; then
         BRIDGE=${bridges[0]}
         echo "Auto-selected bridge: $BRIDGE"
     else
-        read -rp "Select a bridge: " BRIDGE
+        read -rp "Select a bridge [1-${#bridges[@]}]: " choice
+        BRIDGE=${bridges[$((choice-1))]}
         echo "Selected bridge: $BRIDGE"
     fi
 }
