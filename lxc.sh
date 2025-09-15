@@ -132,7 +132,12 @@ bridge
 create
 config
 
+echo "Container $VMID ($HOSTNAME) created successfully with the following configuration:"
 
-echo "LXC container $HOSTNAME created successfully!"
-echo "You can start it with: pct start $VMID"
-echo "Access it with: pct enter $VMID"
+echo "hostname : $HOSTNAME"
+echo "vmid     : $VMID"
+echo "cores    : $CORES"
+echo "memory   : $MEMORY"
+echo "disk size: $DISKSIZE"
+echo "storage  : $STORAGE"
+echo "bridge   : $BRIDGE"
