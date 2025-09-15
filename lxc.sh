@@ -94,11 +94,11 @@ pick_template() {
     local display_names=()
     local store line tmpl_file
 
-    # Use storages with LXC templates
+    # Iterate storages with LXC templates
     while read -r store _; do
         while read -r line; do
             tmpl_file=$(echo "$line" | awk '{print $1}')  # keep full filename
-            [[ -n "$tmpl_file" ]] && templates+=("$store:$tmpl_file") && display_names+=("$tmpl_file")
+            [[ -n "$tmpl_file" ]] && templates+=("$store:${tmpl_file#vztmpl/}") && display_names+=("${tmpl_file#vztmpl/}")
         done < <(pveam list "$store" 2>/dev/null | awk 'NR>1 {print}')
     done < <(pvesm status | awk 'NR>1 {print $1}')
 
@@ -123,6 +123,7 @@ pick_template() {
         fi
     done
 }
+
 
 # ==============================
 # Storage Selection
