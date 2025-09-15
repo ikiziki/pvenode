@@ -255,7 +255,6 @@ create() {
         --hostname "$HOSTNAME" \
         --cores "$CORECOUNT" \
         --memory "$MEMORY" \
-        --storage "$LOCATION" \
         --rootfs "$ROOTFS" \
         --net0 name=eth0,bridge="$BRIDGE",ip=dhcp \
         --password "$ROOTPW" \
