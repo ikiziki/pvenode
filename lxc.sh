@@ -96,7 +96,14 @@ pick_template() {
     local display_names=()
     local store line tmpl_full tmpl_file
 
+    # Loop through all storage pools
     while read -r store _; do
+        # Only consider storages that support LXC templates
+        storage_type=$(pvesm status "$store" | awk 'NR==2 {print $2}')
+        storage_content=$(pvesm status "$store" | awk 'NR==2 {print $3}')
+        [[ "$storage_content" != *vztmpl* ]] && continue
+
+        # List templates on this storage
         while read -r line; do
             tmpl_full=$(echo "$line" | awk '{print $1}')
             [[ -z "$tmpl_full" ]] && continue
@@ -111,6 +118,7 @@ pick_template() {
         exit 1
     fi
 
+    # Prompt user to select a template
     echo -e "${YELLOW}Select an LXC template:${RESET}"
     select choice in "${display_names[@]}"; do
         if [[ -n "$choice" ]]; then
@@ -118,8 +126,8 @@ pick_template() {
                 if [[ "${display_names[i]}" == "$choice" ]]; then
                     TEMPLATE_STORAGE="${templates[i]%%:*}"
                     TEMPLATE_FILE="${templates[i]#*:}"
-                    # Correct path for pct create: STORAGE:vztmpl/file
-                    TEMPLATE_PATH="${TEMPLATE_STORAGE}:${TEMPLATE_FILE}"
+                    # Correct format for pct create
+                    TEMPLATE_PATH="${TEMPLATE_STORAGE}:vztmpl/${TEMPLATE_FILE}"
                     break
                 fi
             done
