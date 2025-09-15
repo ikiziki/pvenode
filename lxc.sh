@@ -136,9 +136,11 @@ pick_template() {
 # ==============================
 pick_storage() {
     local storages=()
-    while read -r store _; do
-        storages+=("$store")
-    done < <(pvesm status --content rootdir 2>/dev/null | awk 'NR>1 {print $1}')
+    local types=()
+    while read -r line; do
+        storages+=("$(echo "$line" | awk '{print $1}')")
+        types+=("$(echo "$line" | awk '{print $2}')")
+    done < <(pvesm status --content rootdir 2>/dev/null | awk 'NR>1 {print}')
 
     if [ ${#storages[@]} -eq 0 ]; then
         echo -e "${RED}No storage locations with rootdir support found.${RESET}" >&2
@@ -149,13 +151,15 @@ pick_storage() {
     select choice in "${storages[@]}"; do
         if [[ -n "$choice" ]]; then
             LOCATION="$choice"
-            echo -e "${YELLOW}You selected:${RESET} $LOCATION"
+            STORAGE_TYPE="${types[REPLY-1]}"
+            echo -e "${YELLOW}You selected:${RESET} $LOCATION ($STORAGE_TYPE)"
             return 0
         else
             echo -e "${RED}Invalid selection${RESET}" >&2
         fi
     done
 }
+
 
 # ==============================
 # Bridge Selection
@@ -194,6 +198,7 @@ create() {
 
     set_pw
 
+    # Privileged or unprivileged
     while true; do
         read -rp "$(echo -e "${YELLOW}Container type? (p=privileged / u=unprivileged): ${RESET}")" choice
         case "$choice" in
@@ -203,6 +208,7 @@ create() {
         esac
     done
 
+    # Summary
     echo -e "${CYAN}${DIVIDER}${RESET}"
     echo -e "${CYAN}Container Configuration:${RESET}"
     echo -e "${CYAN}${DIVIDER}${RESET}"
@@ -211,7 +217,7 @@ create() {
     echo -e "${YELLOW}Cores:    ${RESET}$CORECOUNT"
     echo -e "${YELLOW}Memory:   ${RESET}$MEMORY MB"
     echo -e "${YELLOW}Disk:     ${RESET}$STORAGE GB"
-    echo -e "${YELLOW}Storage:  ${RESET}$LOCATION"
+    echo -e "${YELLOW}Storage:  ${RESET}$LOCATION ($STORAGE_TYPE)"
     echo -e "${YELLOW}Template: ${RESET}$TEMPLATE_PATH"
     echo -e "${YELLOW}Bridge:   ${RESET}$BRIDGE"
     echo -e "${YELLOW}Type:     ${RESET}$PRIVLEVEL"
@@ -220,30 +226,31 @@ create() {
     read -rp "$(echo -e "${YELLOW}Create this container? (y/n): ${RESET}")" confirm
     [[ ! "$confirm" =~ ^[Yy]$ ]] && { echo -e "${RED}Cancelled.${RESET}"; return 1; }
 
-    # Validate storage
+    # Validate storage free space
     storage_info=$(pvesm status | awk -v s="$LOCATION" '$1==s {print $0}')
     if [[ -z "$storage_info" ]]; then
         echo -e "${RED}Storage $LOCATION not found.${RESET}"
         exit 1
     fi
 
-    storage_type=$(echo "$storage_info" | awk '{print $2}')
     free_space=$(echo "$storage_info" | awk '{print $6}') # in GB
-
-    if [[ "$storage_type" != "lvmthin" && "$storage_type" != "dir" ]]; then
-        echo -e "${RED}Storage $LOCATION is not suitable for container rootfs (must be lvmthin or dir).${RESET}"
-        exit 1
-    fi
-
     if (( STORAGE > free_space )); then
         echo -e "${RED}Not enough free space on $LOCATION (requested: $STORAGE GB, free: $free_space GB).${RESET}"
         exit 1
     fi
 
-    # Ensure rootfs syntax uses colon
-    ROOTFS="${LOCATION//\//:}:${STORAGE}G"
+    # Set ROOTFS depending on storage type
+    if [[ "$STORAGE_TYPE" == "dir" ]]; then
+        ROOTFS="${LOCATION}:${STORAGE}G"
+    elif [[ "$STORAGE_TYPE" == "lvmthin" ]]; then
+        ROOTFS="${LOCATION}:${STORAGE}G"
+    else
+        echo -e "${RED}Unsupported storage type: $STORAGE_TYPE${RESET}"
+        exit 1
+    fi
     echo -e "${YELLOW}Creating rootfs: ${RESET}$ROOTFS"
 
+    # Create the container
     pct create "$VMID" "$TEMPLATE_PATH" \
         --hostname "$HOSTNAME" \
         --cores "$CORECOUNT" \
