@@ -7,6 +7,8 @@ declare HOSTNAME
 declare CORES
 declare MEMORY
 declare DISKSIZE
+declare STORAGE
+declare BRIDGE
 
 
 # Function to gather basic setup info
@@ -83,7 +85,26 @@ template() {
 
 # pick a network bridge
 bridge() {
-    :
+    echo "Available network bridges:"
+    bridges=()
+    for dev in /sys/class/net/*; do
+        iface=$(basename "$dev")
+        if [[ -d "$dev/bridge" ]]; then
+            bridges+=("$iface")
+        fi
+    done
+
+    for br in "${bridges[@]}"; do
+        echo " - $br"
+    done
+
+    if [[ ${#bridges[@]} -eq 1 ]]; then
+        BRIDGE=${bridges[0]}
+        echo "Auto-selected bridge: $BRIDGE"
+    else
+        read -rp "Select a bridge: " BRIDGE
+        echo "Selected bridge: $BRIDGE"
+    fi
 }
 
 
