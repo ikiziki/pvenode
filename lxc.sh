@@ -15,18 +15,20 @@ DIVIDER="======================================"
 # ==============================
 # Variables
 # ==============================
-declare VMID        # Container ID
-declare HOSTNAME    # Container hostname
-declare CORECOUNT   # Container core count
-declare MEMORY      # Container memory (MB)
-declare ROOTPW      # Container root password
-declare STORAGE     # Container rootfs size (GB)
-declare LOCATION    # Container rootfs location
-declare TEMPLATE    # Container image template (STORAGE:vztmpl/filename.tar.zst)
-declare MAC         # Container MAC address
-declare PRIVLEVEL   # Container privilege level
-declare BRIDGE      # Container network bridge
-declare UNPRIV      # Unprivileged flag
+declare VMID
+declare HOSTNAME
+declare CORECOUNT
+declare MEMORY
+declare ROOTPW
+declare STORAGE
+declare LOCATION
+declare TEMPLATE_STORAGE
+declare TEMPLATE_FILE
+declare TEMPLATE_PATH
+declare MAC
+declare PRIVLEVEL
+declare UNPRIV
+declare BRIDGE
 
 # ==============================
 # Host Setup
@@ -38,8 +40,8 @@ setup() {
 
     read -p "$(echo -e "${YELLOW}Enter hostname (eg. skynet): ${RESET}")" HOSTNAME
     read -p "$(echo -e "${YELLOW}Enter core count (eg. 2): ${RESET}")" CORECOUNT
-    read -p "$(echo -e "${YELLOW}Enter memory (eg. 2048): ${RESET}")" MEMORY
-    read -p "$(echo -e "${YELLOW}Enter disk size in GB (eg. 30): ${RESET}")" STORAGE
+    read -p "$(echo -e "${YELLOW}Enter memory (MB, eg. 2048): ${RESET}")" MEMORY
+    read -p "$(echo -e "${YELLOW}Enter disk size (GB, eg. 30): ${RESET}")" STORAGE
 
     echo -e "${GREEN}Host specifications saved!${RESET}"
 }
@@ -87,28 +89,26 @@ pick_vmid() {
 }
 
 # ==============================
-# Template Selection
+# Template Selection (with full path)
 # ==============================
 pick_template() {
-    local templates=()       # STORAGE:vztmpl/filename.tar.zst
-    local display_names=()   # Menu names
+    local templates=()
+    local display_names=()
     local store line tmpl_full tmpl_file
 
     while read -r store _; do
         while read -r line; do
-            tmpl_full=$(echo "$line" | awk '{print $1}')   # e.g., 'vztmpl/debian-12-standard_12.7-1_amd64.tar.zst'
+            tmpl_full=$(echo "$line" | awk '{print $1}')
             [[ -z "$tmpl_full" ]] && continue
-
-            # Keep full path for pct create; display clean filename
             tmpl_file="$tmpl_full"
             templates+=("$store:$tmpl_file")
-            display_names+=("${tmpl_full##*/}")  # show filename only in menu
+            display_names+=("${tmpl_full##*/}")
         done < <(pveam list "$store" 2>/dev/null | awk 'NR>1 {print}')
     done < <(pvesm status | awk 'NR>1 {print $1}')
 
     if [ ${#templates[@]} -eq 0 ]; then
         echo -e "${RED}No LXC templates found in storage.${RESET}" >&2
-        return 1
+        exit 1
     fi
 
     echo -e "${YELLOW}Select an LXC template:${RESET}"
@@ -116,11 +116,14 @@ pick_template() {
         if [[ -n "$choice" ]]; then
             for i in "${!display_names[@]}"; do
                 if [[ "${display_names[i]}" == "$choice" ]]; then
-                    TEMPLATE="${templates[i]}"   # STORAGE:vztmpl/filename.tar.zst
+                    TEMPLATE_STORAGE="${templates[i]%%:*}"
+                    TEMPLATE_FILE="${templates[i]#*:}"
+                    # Convert STORAGE:vztmpl/file -> full path
+                    TEMPLATE_PATH="/mnt/pve/${TEMPLATE_STORAGE}/${TEMPLATE_FILE}"
                     break
                 fi
             done
-            echo -e "${GREEN}Using template:${RESET} $TEMPLATE"
+            echo -e "${GREEN}Using template:${RESET} $TEMPLATE_PATH"
             return 0
         else
             echo -e "${RED}Invalid selection${RESET}" >&2
@@ -139,7 +142,7 @@ pick_storage() {
 
     if [ ${#storages[@]} -eq 0 ]; then
         echo -e "${RED}No storage locations with rootdir support found.${RESET}" >&2
-        return 1
+        exit 1
     fi
 
     echo -e "${YELLOW}Select a storage location for the container disk:${RESET}"
@@ -167,7 +170,7 @@ pick_bridge() {
 
     if [ ${#bridges[@]} -eq 0 ]; then
         echo -e "${RED}No network bridges found.${RESET}" >&2
-        return 1
+        exit 1
     fi
 
     echo -e "${YELLOW}Select a network bridge:${RESET}"
@@ -209,7 +212,7 @@ create() {
     echo -e "${YELLOW}Memory:   ${RESET}$MEMORY MB"
     echo -e "${YELLOW}Disk:     ${RESET}$STORAGE GB"
     echo -e "${YELLOW}Storage:  ${RESET}$LOCATION"
-    echo -e "${YELLOW}Template: ${RESET}$TEMPLATE"
+    echo -e "${YELLOW}Template: ${RESET}$TEMPLATE_PATH"
     echo -e "${YELLOW}Bridge:   ${RESET}$BRIDGE"
     echo -e "${YELLOW}Type:     ${RESET}$PRIVLEVEL"
     echo -e "${CYAN}${DIVIDER}${RESET}"
@@ -217,8 +220,7 @@ create() {
     read -rp "$(echo -e "${YELLOW}Create this container? (y/n): ${RESET}")" confirm
     [[ ! "$confirm" =~ ^[Yy]$ ]] && { echo -e "${RED}Cancelled.${RESET}"; return 1; }
 
-    # pct create using quotes to preserve storage:path correctly
-    pct create "$VMID" "$TEMPLATE" \
+    pct create "$VMID" "$TEMPLATE_PATH" \
         --hostname "$HOSTNAME" \
         --cores "$CORECOUNT" \
         --memory "$MEMORY" \
@@ -235,6 +237,7 @@ create() {
         echo -e "${GREEN}Container started.${RESET}"
     else
         echo -e "${RED}Failed to create container.${RESET}"
+        exit 1
     fi
 }
 
@@ -256,22 +259,10 @@ cleanup() {
     echo -e "${YELLOW}Clearing /etc/update-motd.d/...${RESET}"
     pct exec "$VMID" -- bash -c "rm -rf /etc/update-motd.d/*"
 
-    read -rp "$(echo -e "${YELLOW}Do you want to install Docker and Docker Compose? [y/N]: ${RESET}")" install_docker
-    if [[ "$install_docker" =~ ^[Yy]$ ]]; then
-        echo -e "${YELLOW}Installing Docker and Docker Compose...${RESET}"
-        pct exec "$VMID" -- bash -c "apt install -y apt-transport-https ca-certificates curl gnupg lsb-release"
-        pct exec "$VMID" -- bash -c "curl -fsSL https://download.docker.com/linux/$(. /etc/os-release && echo "$ID")/gpg | gpg --dearmor -o /usr/share/keyrings/docker-archive-keyring.gpg"
-        pct exec "$VMID" -- bash -c "echo \"deb [arch=$(dpkg --print-architecture) signed-by=/usr/share/keyrings/docker-archive-keyring.gpg] https://download.docker.com/linux/$(. /etc/os-release && echo "$ID") $(lsb_release -cs) stable\" > /etc/apt/sources.list.d/docker.list"
-        pct exec "$VMID" -- bash -c "apt update && apt install -y docker-ce docker-ce-cli containerd.io docker-compose-plugin"
-        pct exec "$VMID" -- systemctl enable docker --now
-        echo -e "${GREEN}Docker and Docker Compose installed successfully.${RESET}"
-    fi
-
-    echo -e "${YELLOW}Fetching container MAC address...${RESET}"
     MAC=$(pct config "$VMID" | awk '/net0/ {print $2}' | sed 's/^.*hwaddr=//')
     echo -e "${GREEN}Container $VMID MAC address: ${RESET}$MAC"
 
-    echo -e "${GREEN}Cleanup and post-configuration complete.${RESET}"
+    echo -e "${GREEN}Cleanup complete.${RESET}"
 }
 
 # ==============================
