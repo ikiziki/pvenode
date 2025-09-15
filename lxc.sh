@@ -1,7 +1,6 @@
 #!/usr/bin/env bash
 # A streamlined LXC creation script for Proxmox VE
 
-
 declare VMID
 declare HOSTNAME
 declare CORES
@@ -11,7 +10,6 @@ declare STORAGE
 declare BRIDGE
 declare TEMPLATE
 
-
 # Function to gather basic setup info
 setup() {
     read -p "Enter the hostname (eg: my-container): " HOSTNAME
@@ -19,7 +17,6 @@ setup() {
     read -p "Enter the amount of RAM (in MB): " MEMORY
     read -p "Enter the root disk size (in GB): " DISKSIZE
 }
-
 
 # Function to get and confirm VMID
 vmid() {
@@ -49,8 +46,7 @@ vmid() {
     fi
 }
 
-
-# pick a storage location for the container image
+# Pick a storage location for the container image
 storage() {
     # Get available storage backends that support container images
     options=($(pvesm status | awk '$2 ~ /dir|lvmthin|zfspool|btrfs|cephfs|rbd/ {print $1}'))
@@ -77,8 +73,7 @@ storage() {
     fi
 }
 
-
-# pick a template for the container
+# Pick a template for the container
 template() {
     echo "Scanning available container templates on this host:"
 
@@ -90,10 +85,10 @@ template() {
         while read -r line; do
             tmpl_file=$(echo "$line" | awk '{print $1}')  # first column = template name
             if [[ -n "$tmpl_file" ]]; then
-                templates+=("$tmpl_file")                   # template filename only
-                template_storage+=("$store")                # storage where the template is
+                templates+=("$tmpl_file")                  # template filename only
+                template_storage+=("$store")               # storage where the template is
                 tmpl_name="${tmpl_file%%.*}"               # strip extension for display
-                display+=("$tmpl_name")                     # display only template name
+                display+=("$tmpl_name")                    # display only template name
             fi
         done < <(pveam list "$store" | awk 'NR>1')
     done
@@ -111,8 +106,7 @@ template() {
     echo "Selected TEMPLATE: $TEMPLATE (Storage: $TEMPLATE_STORAGE)"
 }
 
-
-# pick a network bridge
+# Pick a network bridge
 bridge() {
     echo "Available network bridges:"
     bridges=()
@@ -123,7 +117,7 @@ bridge() {
         fi
     done
 
-    # show numbered list
+    # Show numbered list
     for i in "${!bridges[@]}"; do
         printf " [%d] %s\n" "$((i+1))" "${bridges[$i]}"
     done
@@ -138,19 +132,15 @@ bridge() {
     fi
 }
 
-
-# create the container
+# Create the container
 create() {
     :
 }
 
-
-# configure the container
+# Configure the container
 config() {
     :
 }
-
-
 
 # Main Loop
 setup
@@ -162,7 +152,6 @@ create
 config
 
 echo "Container $VMID ($HOSTNAME) created successfully with the following configuration:"
-
 echo "hostname : $HOSTNAME"
 echo "vmid     : $VMID"
 echo "cores    : $CORES"
