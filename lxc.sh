@@ -89,7 +89,7 @@ pick_vmid() {
 }
 
 # ==============================
-# Template Selection (with full path)
+# Template Selection (Proxmox storage reference)
 # ==============================
 pick_template() {
     local templates=()
@@ -118,8 +118,8 @@ pick_template() {
                 if [[ "${display_names[i]}" == "$choice" ]]; then
                     TEMPLATE_STORAGE="${templates[i]%%:*}"
                     TEMPLATE_FILE="${templates[i]#*:}"
-                    # Convert STORAGE:vztmpl/file -> full path
-                    TEMPLATE_PATH="/mnt/pve/${TEMPLATE_STORAGE}/${TEMPLATE_FILE}"
+                    # Correct path for pct create: STORAGE:vztmpl/file
+                    TEMPLATE_PATH="${TEMPLATE_STORAGE}:${TEMPLATE_FILE}"
                     break
                 fi
             done
