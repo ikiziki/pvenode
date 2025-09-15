@@ -45,22 +45,27 @@ vmid() {
 
 # pick a storage location for the container image
 storage() {
+    :
 }
 
 # pick a template for the container
 template() {
+    :
 }
 
 # pick a network bridge
 bridge() {
+    :
 }
 
 # create the container
 create() {
+    :
 }
 
 # configure the container
 config() {
+    :
 }
 
 
