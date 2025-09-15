@@ -241,9 +241,9 @@ create() {
 
     # Set ROOTFS depending on storage type
     if [[ "$STORAGE_TYPE" == "dir" ]]; then
-        ROOTFS="${LOCATION}:${STORAGE}G"
+        ROOTFS="${LOCATION}:${STORAGE}"
     elif [[ "$STORAGE_TYPE" == "lvmthin" ]]; then
-        ROOTFS="${LOCATION}:${STORAGE}G"
+        ROOTFS="${LOCATION}:${STORAGE}"
     else
         echo -e "${RED}Unsupported storage type: $STORAGE_TYPE${RESET}"
         exit 1
