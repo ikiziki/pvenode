@@ -92,38 +92,40 @@ pick_vmid() {
 pick_template() {
     local templates=()
     local display_names=()
-    
-    # Gather templates from all storages
-    while read -r store _; do
-        while read -r line; do
-            local tmpl_file tmpl_name
-            tmpl_file=$(echo "$line" | awk '{print $1}' | sed 's#.*/##')  # filename only
-            tmpl_name="$tmpl_file"  # display name in menu
-            [[ -n "$tmpl_file" ]] && templates+=("$store:$tmpl_file") && display_names+=("$tmpl_name")
-        done < <(pveam list "$store" 2>/dev/null | awk 'NR>1 {print}')
-    done < <(pvesm status | awk 'NR>1 {print $1}')
+    local store selected tmpl
+
+    # Pick storage first (where templates will be downloaded)
+    pick_storage  # sets $LOCATION
+
+    # Gather available templates
+    while read -r tmpl; do
+        [[ -n "$tmpl" ]] && templates+=("$tmpl") && display_names+=("$tmpl")
+    done < <(pveam available | awk '{print $1}' | tail -n +2)
 
     if [ ${#templates[@]} -eq 0 ]; then
-        echo -e "${RED}No LXC templates found.${RESET}" >&2
+        echo -e "${RED}No LXC templates available.${RESET}" >&2
         return 1
     fi
 
     echo -e "${YELLOW}Select an LXC template:${RESET}"
     select choice in "${display_names[@]}"; do
         if [[ -n "$choice" ]]; then
-            # Map menu selection back to full storage:filename
-            for i in "${!display_names[@]}"; do
-                if [[ "${display_names[i]}" == "$choice" ]]; then
-                    TEMPLATE="${templates[i]}"
-                    break
-                fi
-            done
-            echo -e "${YELLOW}You selected:${RESET} $TEMPLATE"
-            return 0
+            tmpl="$choice"
+            break
         else
             echo -e "${RED}Invalid selection${RESET}" >&2
         fi
     done
+
+    # Check if template is already downloaded
+    if ! pveam list "$LOCATION" | grep -qw "$tmpl"; then
+        echo -e "${YELLOW}Template not found in storage '$LOCATION', downloading...${RESET}"
+        pveam download "$LOCATION" "$tmpl"
+    fi
+
+    # Set TEMPLATE to storage:template alias (no .tar.zst, no path)
+    TEMPLATE="$LOCATION:$tmpl"
+    echo -e "${GREEN}Using template:${RESET} $TEMPLATE"
 }
 
 # ==============================
