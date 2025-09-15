@@ -1,5 +1,8 @@
 #!/usr/bin/env bash
 
+# Always work from /usr/local/bin/pvenode
+cd /usr/local/bin/pvenode || exit 1
+
 # Color codes
 GREEN="\033[0;32m"
 YELLOW="\033[1;33m"
