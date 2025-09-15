@@ -1,6 +1,8 @@
 #!/usr/bin/env bash
 
-# ---- Colors ----
+# ==============================
+# Colors
+# ==============================
 RED="\e[31m"
 GREEN="\e[32m"
 YELLOW="\e[33m"
@@ -8,48 +10,48 @@ BLUE="\e[34m"
 CYAN="\e[36m"
 RESET="\e[0m"
 
-# ---- Divider ----
+# Divider line
 DIVIDER="======================================"
 
-# ---- Variables ----
-declare VMID        # container ID
-declare HOSTNAME    # container hostname
-declare CORECOUNT   # container core count
-declare MEMORY      # container memory (MB)
-declare ROOTPW      # container password (root)
-declare STORAGE     # container rootfs size
-declare LOCATION    # container rootfs location
-declare TEMPLATE    # container image template
-declare MAC         # container MAC address
-declare PRIVLEVEL   # container privilege level
-declare BRIDGE      # container bridge
+# ==============================
+# Variables
+# ==============================
+declare VMID        # Container ID
+declare HOSTNAME    # Container hostname
+declare CORECOUNT   # Container core count
+declare MEMORY      # Container memory (MB)
+declare ROOTPW      # Container root password
+declare STORAGE     # Container rootfs size (GB)
+declare LOCATION    # Container rootfs location
+declare TEMPLATE    # Container image template
+declare MAC         # Container MAC address
+declare PRIVLEVEL   # Container privilege level
+declare BRIDGE      # Container network bridge
 
-# ---- HELPERS ----
-# ---- Gather Input ----
+# ==============================
+# Host Setup
+# ==============================
 setup() {
     echo -e "${CYAN}${DIVIDER}${RESET}"
     echo -e "${CYAN}===== Set Host Specifications =====${RESET}"
     echo -e "${CYAN}${DIVIDER}${RESET}"
 
-    read -p "$(echo -e "${YELLOW}Enter hostname (eg. skynet) : ${RESET}")" HOSTNAME
-    read -p "$(echo -e "${YELLOW}Enter core count (eg. 2) : ${RESET}")" CORECOUNT
-    read -p "$(echo -e "${YELLOW}Enter memory (eg. 2048) : ${RESET}")" MEMORY
-    read -p "$(echo -e "${YELLOW}Enter disk size (eg. 30) : ${RESET}")" STORAGE
+    read -p "$(echo -e "${YELLOW}Enter hostname (eg. skynet): ${RESET}")" HOSTNAME
+    read -p "$(echo -e "${YELLOW}Enter core count (eg. 2): ${RESET}")" CORECOUNT
+    read -p "$(echo -e "${YELLOW}Enter memory (eg. 2048): ${RESET}")" MEMORY
+    read -p "$(echo -e "${YELLOW}Enter disk size in GB (eg. 30): ${RESET}")" STORAGE
 
     echo -e "${GREEN}Host specifications saved!${RESET}"
 }
 
-# set a root password
+# ==============================
+# Root Password
+# ==============================
 set_pw() {
     local pw1 pw2
-
     while true; do
-        # -s hides input
-        read -s -p "$(echo -e "${YELLOW}Enter root password: ${RESET}")" pw1
-        echo
-        read -s -p "$(echo -e "${YELLOW}Confirm root password: ${RESET}")" pw2
-        echo
-
+        read -s -p "$(echo -e "${YELLOW}Enter root password: ${RESET}")" pw1; echo
+        read -s -p "$(echo -e "${YELLOW}Confirm root password: ${RESET}")" pw2; echo
         if [[ "$pw1" == "$pw2" && -n "$pw1" ]]; then
             ROOTPW="$pw1"
             echo -e "${GREEN}Password set successfully!${RESET}"
@@ -60,24 +62,19 @@ set_pw() {
     done
 }
 
-# pick a vm id 
+# ==============================
+# VMID Selection
+# ==============================
 pick_vmid() {
-    # List all existing VMIDs (LXC + QEMU)
-    local used
+    local used vmid input
     used=$(pvesh get /cluster/resources --type vm --output-format=json | jq -r '.[].vmid')
+    vmid=100
+    while grep -qw "$vmid" <<< "$used"; do ((vmid++)); done
 
-    # Find the next free VMID (starting from 100)
-    local vmid=100
-    while grep -qw "$vmid" <<< "$used"; do
-        ((vmid++))
-    done
-
-    # Offer the user a choice to override
     echo -e "${YELLOW}Suggested next VMID is:${RESET} $vmid"
     read -rp $'\033[33mEnter VMID to use (or press Enter to accept suggested): \033[0m' input
 
     if [[ -n "$input" ]]; then
-        # If user enters a VMID that is already in use, increment until free
         while grep -qw "$input" <<< "$used"; do
             echo -e "${YELLOW}VMID $input is already in use, incrementing...${RESET}"
             ((input++))
@@ -89,13 +86,12 @@ pick_vmid() {
     echo -e "${YELLOW}Using VMID:${RESET} $VMID"
 }
 
-# pick a template from all storage locations
+# ==============================
+# Template Selection
+# ==============================
 pick_template() {
     local templates=()
-
-    # Loop through all storages
     while read -r store _; do
-        # Capture only valid template lines
         while read -r line; do
             local tmpl
             tmpl=$(echo "$line" | awk '{print $1}')
@@ -103,13 +99,11 @@ pick_template() {
         done < <(pveam list "$store" 2>/dev/null | awk 'NR>1 {print}')
     done < <(pvesm status | awk 'NR>1 {print $1}')
 
-    # If none found, bail
     if [ ${#templates[@]} -eq 0 ]; then
-        echo -e "${YELLOW}No LXC templates found.${RESET}" >&2
+        echo -e "${RED}No LXC templates found.${RESET}" >&2
         return 1
     fi
 
-    # Menu
     echo -e "${YELLOW}Select an LXC template:${RESET}"
     select choice in "${templates[@]}"; do
         if [[ -n "$choice" ]]; then
@@ -117,57 +111,53 @@ pick_template() {
             echo -e "${YELLOW}You selected:${RESET} $TEMPLATE"
             return 0
         else
-            echo -e "${YELLOW}Invalid selection${RESET}" >&2
+            echo -e "${RED}Invalid selection${RESET}" >&2
         fi
     done
 }
 
-# pick a rootfs storage location
+# ==============================
+# Storage Selection
+# ==============================
 pick_storage() {
     local storages=()
-
-    # Collect storages that support rootdir
     while read -r store _; do
         storages+=("$store")
     done < <(pvesm status --content rootdir 2>/dev/null | awk 'NR>1 {print $1}')
 
-    # If none found, bail
     if [ ${#storages[@]} -eq 0 ]; then
-        echo -e "${YELLOW}No storage locations with rootdir support found.${RESET}" >&2
+        echo -e "${RED}No storage locations with rootdir support found.${RESET}" >&2
         return 1
     fi
 
-    # Menu
-    echo -e "${YELLOW}Select a storage location:${RESET}"
+    echo -e "${YELLOW}Select a storage location for the container disk:${RESET}"
     select choice in "${storages[@]}"; do
         if [[ -n "$choice" ]]; then
             LOCATION="$choice"
             echo -e "${YELLOW}You selected:${RESET} $LOCATION"
             return 0
         else
-            echo -e "${YELLOW}Invalid selection${RESET}" >&2
+            echo -e "${RED}Invalid selection${RESET}" >&2
         fi
     done
 }
 
-# pick a network bridge for the new host
+# ==============================
+# Bridge Selection
+# ==============================
 pick_bridge() {
     local bridges=()
-
-    # Collect bridges (vmbr*) from network interfaces
     while read -r line; do
         local name
-        name=$(echo "$line" | awk -F: '{print $2}' | xargs)  # strip spaces
+        name=$(echo "$line" | awk -F: '{print $2}' | xargs)
         [[ $name == vmbr* ]] && bridges+=("$name")
     done < <(ip -o link show)
 
-    # If none found, bail
     if [ ${#bridges[@]} -eq 0 ]; then
-        echo -e "${YELLOW}No bridges found.${RESET}" >&2
+        echo -e "${RED}No network bridges found.${RESET}" >&2
         return 1
     fi
 
-    # Menu
     echo -e "${YELLOW}Select a network bridge:${RESET}"
     select choice in "${bridges[@]}"; do
         if [[ -n "$choice" ]]; then
@@ -175,72 +165,58 @@ pick_bridge() {
             echo -e "${YELLOW}You selected:${RESET} $BRIDGE"
             return 0
         else
-            echo -e "${YELLOW}Invalid selection${RESET}" >&2
+            echo -e "${RED}Invalid selection${RESET}" >&2
         fi
     done
 }
 
-# ---- Create LXC ---- 
+# ==============================
+# Create LXC
+# ==============================
 create() {
     echo -e "${BLUE}${DIVIDER}${RESET}"
     echo -e "${BLUE}Preparing to create LXC container...${RESET}"
 
-    # Prompt for root password
     set_pw
 
-    # Prompt for privilege level
     while true; do
-        read -rp "$(echo -e "${YELLOW}Container type? (p=privileged / u=unprivileged) : ${RESET}")" choice
+        read -rp "$(echo -e "${YELLOW}Container type? (p=privileged / u=unprivileged): ${RESET}")" choice
         case "$choice" in
-            p|P)
-                PRIVLEVEL="privileged"
-                UNPRIV="0"
-                break
-                ;;
-            u|U)
-                PRIVLEVEL="unprivileged"
-                UNPRIV="1"
-                break
-                ;;
-            *)
-                echo -e "${RED}Invalid choice. Enter 'p' or 'u'.${RESET}"
-                ;;
+            p|P) PRIVLEVEL="privileged"; UNPRIV="0"; break ;;
+            u|U) PRIVLEVEL="unprivileged"; UNPRIV="1"; break ;;
+            *)   echo -e "${RED}Invalid choice. Enter 'p' or 'u'.${RESET}" ;;
         esac
     done
 
-    # Extract storage and template filename
     local store tmpl_file
-    store="${TEMPLATE%%:*}"       # before the colon
-    tmpl_file="${TEMPLATE#*:}"    # after the colon
+    store="${TEMPLATE%%:*}"
+    tmpl_file="${TEMPLATE#*:}"
 
-    # Pretty print configuration
     echo -e "${CYAN}${DIVIDER}${RESET}"
     echo -e "${CYAN}Container Configuration:${RESET}"
     echo -e "${CYAN}${DIVIDER}${RESET}"
-    echo -e "${YELLOW}VMID: ${RESET}$VMID"
+    echo -e "${YELLOW}VMID:     ${RESET}$VMID"
     echo -e "${YELLOW}Hostname: ${RESET}$HOSTNAME"
-    echo -e "${YELLOW}Cores: ${RESET}$CORECOUNT"
-    echo -e "${YELLOW}Memory: ${RESET}$MEMORY MB"
-    echo -e "${YELLOW}Disk: ${RESET}$STORAGE GB"
-    echo -e "${YELLOW}Storage: ${RESET}$store"
+    echo -e "${YELLOW}Cores:    ${RESET}$CORECOUNT"
+    echo -e "${YELLOW}Memory:   ${RESET}$MEMORY MB"
+    echo -e "${YELLOW}Disk:     ${RESET}$STORAGE GB"
+    echo -e "${YELLOW}Storage:  ${RESET}$LOCATION"
     echo -e "${YELLOW}Template: ${RESET}$tmpl_file"
-    echo -e "${YELLOW}Bridge: ${RESET}$BRIDGE"
-    echo -e "${YELLOW}Type: ${RESET}$PRIVLEVEL"
+    echo -e "${YELLOW}Bridge:   ${RESET}$BRIDGE"
+    echo -e "${YELLOW}Type:     ${RESET}$PRIVLEVEL"
     echo -e "${CYAN}${DIVIDER}${RESET}"
 
-    # Confirm
     read -rp "$(echo -e "${YELLOW}Create this container? (y/n): ${RESET}")" confirm
     if [[ ! "$confirm" =~ ^[Yy]$ ]]; then
         echo -e "${RED}Container creation cancelled.${RESET}"
         return 1
     fi
 
-    # Create LXC container
     pct create "$VMID" "$store:$tmpl_file" \
         --hostname "$HOSTNAME" \
         --cores "$CORECOUNT" \
         --memory "$MEMORY" \
-        --rootfs "${STORAGE}G" \
+        --rootfs "$LOCATION:${STORAGE}G" \
         --net0 name=eth0,bridge="$BRIDGE",ip=dhcp \
         --password "$ROOTPW" \
         --unprivileged "$UNPRIV" \
@@ -256,27 +232,25 @@ create() {
     fi
 }
 
-# ---- Clean up ----
+# ==============================
+# Post-creation Cleanup
+# ==============================
 cleanup() {
     echo -e "${BLUE}${DIVIDER}${RESET}"
     echo -e "${BLUE}Running post-creation cleanup and configuration...${RESET}"
 
-    # Update and upgrade packages first
     echo -e "${YELLOW}Running apt update and upgrade...${RESET}"
     pct exec "$VMID" -- bash -c "apt update && apt upgrade -y"
 
-    # Modify SSH config to allow root login and password auth
     echo -e "${YELLOW}Modifying SSH configuration...${RESET}"
     pct exec "$VMID" -- bash -c "sed -i 's/^#\?PermitRootLogin .*/PermitRootLogin yes/' /etc/ssh/sshd_config"
     pct exec "$VMID" -- bash -c "sed -i 's/^#\?PasswordAuthentication .*/PasswordAuthentication yes/' /etc/ssh/sshd_config"
     pct exec "$VMID" -- systemctl restart sshd
 
-    # Clear /etc/update-motd.d/
-    echo -e "${YELLOW}Clearing /etc/update-motd.d/ ...${RESET}"
+    echo -e "${YELLOW}Clearing /etc/update-motd.d/...${RESET}"
     pct exec "$VMID" -- bash -c "rm -rf /etc/update-motd.d/*"
 
-    # Ask user if they want Docker installed
-    read -rp "$(echo -e ${YELLOW}Do you want to install Docker and Docker Compose? [y/N]: ${RESET})" install_docker
+    read -rp "$(echo -e "${YELLOW}Do you want to install Docker and Docker Compose? [y/N]: ${RESET}")" install_docker
     if [[ "$install_docker" =~ ^[Yy]$ ]]; then
         echo -e "${YELLOW}Installing Docker and Docker Compose...${RESET}"
         pct exec "$VMID" -- bash -c "apt install -y apt-transport-https ca-certificates curl gnupg lsb-release"
@@ -287,7 +261,6 @@ cleanup() {
         echo -e "${GREEN}Docker and Docker Compose installed successfully.${RESET}"
     fi
 
-    # Print the MAC address of the container
     echo -e "${YELLOW}Fetching container MAC address...${RESET}"
     local mac
     mac=$(pct config "$VMID" | awk '/net0/ {print $2}' | sed 's/^.*hwaddr=//')
@@ -296,7 +269,9 @@ cleanup() {
     echo -e "${GREEN}Cleanup and post-configuration complete.${RESET}"
 }
 
-# ---- Main thread ----
+# ==============================
+# Main
+# ==============================
 setup
 pick_vmid
 pick_template
