@@ -220,7 +220,27 @@ create() {
     read -rp "$(echo -e "${YELLOW}Create this container? (y/n): ${RESET}")" confirm
     [[ ! "$confirm" =~ ^[Yy]$ ]] && { echo -e "${RED}Cancelled.${RESET}"; return 1; }
 
-    # Fix rootfs syntax: replace any slashes with colon
+    # Validate storage
+    storage_info=$(pvesm status | awk -v s="$LOCATION" '$1==s {print $0}')
+    if [[ -z "$storage_info" ]]; then
+        echo -e "${RED}Storage $LOCATION not found.${RESET}"
+        exit 1
+    fi
+
+    storage_type=$(echo "$storage_info" | awk '{print $2}')
+    free_space=$(echo "$storage_info" | awk '{print $6}') # in GB
+
+    if [[ "$storage_type" != "lvmthin" && "$storage_type" != "dir" ]]; then
+        echo -e "${RED}Storage $LOCATION is not suitable for container rootfs (must be lvmthin or dir).${RESET}"
+        exit 1
+    fi
+
+    if (( STORAGE > free_space )); then
+        echo -e "${RED}Not enough free space on $LOCATION (requested: $STORAGE GB, free: $free_space GB).${RESET}"
+        exit 1
+    fi
+
+    # Ensure rootfs syntax uses colon
     ROOTFS="${LOCATION//\//:}:${STORAGE}G"
     echo -e "${YELLOW}Creating rootfs: ${RESET}$ROOTFS"
 
