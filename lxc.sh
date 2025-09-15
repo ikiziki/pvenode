@@ -91,11 +91,15 @@ pick_vmid() {
 # ==============================
 pick_template() {
     local templates=()
+    local display_names=()
+    
+    # Gather templates from all storages
     while read -r store _; do
         while read -r line; do
-            local tmpl
-            tmpl=$(echo "$line" | awk '{print $1}')  # keep full path + extension
-            [[ -n "$tmpl" ]] && templates+=("$store:$tmpl")
+            local tmpl_file tmpl_name
+            tmpl_file=$(echo "$line" | awk '{print $1}' | sed 's#.*/##')  # filename only
+            tmpl_name="$tmpl_file"  # display name in menu
+            [[ -n "$tmpl_file" ]] && templates+=("$store:$tmpl_file") && display_names+=("$tmpl_name")
         done < <(pveam list "$store" 2>/dev/null | awk 'NR>1 {print}')
     done < <(pvesm status | awk 'NR>1 {print $1}')
 
@@ -105,9 +109,15 @@ pick_template() {
     fi
 
     echo -e "${YELLOW}Select an LXC template:${RESET}"
-    select choice in "${templates[@]}"; do
+    select choice in "${display_names[@]}"; do
         if [[ -n "$choice" ]]; then
-            TEMPLATE="$choice"
+            # Map menu selection back to full storage:filename
+            for i in "${!display_names[@]}"; do
+                if [[ "${display_names[i]}" == "$choice" ]]; then
+                    TEMPLATE="${templates[i]}"
+                    break
+                fi
+            done
             echo -e "${YELLOW}You selected:${RESET} $TEMPLATE"
             return 0
         else
