@@ -9,7 +9,7 @@ declare DISKSIZE
 declare STORAGE
 declare BRIDGE
 declare TEMPLATE
-declare PRIVILEGE
+declare PRIVILEDGE
 
 # Function to gather basic setup info
 setup() {
@@ -136,9 +136,9 @@ bridge() {
 priveledge() {
     read -p "Should the container be privileged? (y/n) [n]: " priv
     if [[ "$priv" =~ ^[Yy]$ ]]; then
-        PRIVILEGE="--unprivileged 0"
+        PRIVILEDGE="--unprivileged 0"
     else
-        PRIVILEGE="--unprivileged 1"
+        PRIVILEDGE="--unprivileged 1"
     fi
 }
 
@@ -158,6 +158,7 @@ vmid
 template
 storage
 bridge
+priveledge
 create
 config
 
