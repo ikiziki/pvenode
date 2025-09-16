@@ -145,9 +145,9 @@ options() {
 
     read -p "Enable nesting? (y/n) [n]: " nest
     if [[ "$nest" =~ ^[Yy]$ ]]; then
-        NESTING="--features nesting=1"
+        NESTING="--nesting=1"
     else
-        NESTING="--features nesting=0"
+        NESTING="--nesting=0"
     fi
 }
 
