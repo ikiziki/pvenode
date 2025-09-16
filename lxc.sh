@@ -9,7 +9,7 @@ declare DISKSIZE
 declare STORAGE
 declare BRIDGE
 declare TEMPLATE
-declare PRIVILEDGE
+declare PRIVILEGE
 declare NESTING
 
 # Function to gather basic setup info
@@ -180,5 +180,5 @@ echo "disk size : $DISKSIZE"
 echo "storage   : $STORAGE"
 echo "bridge    : $BRIDGE"
 echo "template  : $TEMPLATE"
-echo "privileged: $PRIVILEDGE"
+echo "privileged: $PRIVILEGE"
 echo "nesting   : $NESTING"
