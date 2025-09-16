@@ -10,6 +10,7 @@ declare STORAGE
 declare BRIDGE
 declare TEMPLATE
 declare PRIVILEDGE
+declare NESTING
 
 # Function to gather basic setup info
 setup() {
@@ -133,12 +134,20 @@ bridge() {
     fi
 }
 
-priveledge() {
+# set container options
+options() {
     read -p "Should the container be privileged? (y/n) [n]: " priv
     if [[ "$priv" =~ ^[Yy]$ ]]; then
-        PRIVILEDGE="--unprivileged 0"
+        PRIVILEGE="--unprivileged 0"
     else
-        PRIVILEDGE="--unprivileged 1"
+        PRIVILEGE="--unprivileged 1"
+    fi
+
+    read -p "Enable nesting? (y/n) [n]: " nest
+    if [[ "$nest" =~ ^[Yy]$ ]]; then
+        NESTING="--features nesting=1"
+    else
+        NESTING="--features nesting=0"
     fi
 }
 
@@ -158,7 +167,7 @@ vmid
 template
 storage
 bridge
-priveledge
+options
 create
 config
 
@@ -172,3 +181,4 @@ echo "storage   : $STORAGE"
 echo "bridge    : $BRIDGE"
 echo "template  : $TEMPLATE"
 echo "privileged: $PRIVILEDGE"
+echo "nesting   : $NESTING"
