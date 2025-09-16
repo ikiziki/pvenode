@@ -9,6 +9,7 @@ declare DISKSIZE
 declare STORAGE
 declare BRIDGE
 declare TEMPLATE
+declare PRIVILEGE
 
 # Function to gather basic setup info
 setup() {
@@ -132,6 +133,15 @@ bridge() {
     fi
 }
 
+priveledge() {
+    read -p "Should the container be privileged? (y/n) [n]: " priv
+    if [[ "$priv" =~ ^[Yy]$ ]]; then
+        PRIVILEGE="--unprivileged 0"
+    else
+        PRIVILEGE="--unprivileged 1"
+    fi
+}
+
 # Create the container
 create() {
     :
@@ -152,11 +162,12 @@ create
 config
 
 echo "Container $VMID ($HOSTNAME) created successfully with the following configuration:"
-echo "hostname : $HOSTNAME"
-echo "vmid     : $VMID"
-echo "cores    : $CORES"
-echo "memory   : $MEMORY"
-echo "disk size: $DISKSIZE"
-echo "storage  : $STORAGE"
-echo "bridge   : $BRIDGE"
-echo "template : $TEMPLATE"
+echo "hostname  : $HOSTNAME"
+echo "vmid      : $VMID"
+echo "cores     : $CORES"
+echo "memory    : $MEMORY"
+echo "disk size : $DISKSIZE"
+echo "storage   : $STORAGE"
+echo "bridge    : $BRIDGE"
+echo "template  : $TEMPLATE"
+echo "privileged: $PRIVILEGE"
