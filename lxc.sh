@@ -163,6 +163,24 @@ config() {
     echo "Configuring container with VMID $VMID..."
 }
 
+# Review the container setup
+review() {
+    echo "Reviewing container setup..."
+    echo "VMID      : $VMID"
+    echo "hostname  : $HOSTNAME"
+    echo "vmid      : $VMID"
+    echo "cores     : $CORES"
+    echo "memory    : $MEMORY"
+    echo "disk size : $DISKSIZE"
+    echo "storage   : $STORAGE"
+    echo "bridge    : $BRIDGE"
+    echo "template  : $TEMPLATE"
+    echo "privileged: $PRIVILEGE"
+    echo "nesting   : $NESTING"
+    echo "root pass : $ROOTPASSWORD"
+}
+
+
 # Main Loop
 setup
 vmid
@@ -172,16 +190,4 @@ bridge
 options
 create
 config
-
-echo "Container $VMID created successfully with the following configuration:"
-echo "hostname  : $HOSTNAME"
-echo "vmid      : $VMID"
-echo "cores     : $CORES"
-echo "memory    : $MEMORY"
-echo "disk size : $DISKSIZE"
-echo "storage   : $STORAGE"
-echo "bridge    : $BRIDGE"
-echo "template  : $TEMPLATE"
-echo "privileged: $PRIVILEGE"
-echo "nesting   : $NESTING"
-echo "root pass : $ROOTPASSWORD"
+review
