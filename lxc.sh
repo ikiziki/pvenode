@@ -11,6 +11,7 @@ declare BRIDGE
 declare TEMPLATE
 declare PRIVILEGE
 declare NESTING
+declare ROOTPASSWORD
 
 # Function to gather basic setup info
 setup() {
@@ -149,6 +150,19 @@ options() {
     else
         NESTING="--nesting=0"
     fi
+
+    while true; do
+        read -s -p "Enter root password for container: " pass1
+        echo
+        read -s -p "Confirm root password: " pass2
+        echo
+        if [[ "$pass1" == "$pass2" && -n "$pass1" ]]; then
+            ROOTPASSWORD="-password $pass1"
+            break
+        else
+            echo "Passwords do not match or are empty. Please try again."
+        fi
+    done
 }
 
 # Create the container
