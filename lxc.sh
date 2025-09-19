@@ -15,15 +15,10 @@ declare ROOTPASSWORD
 
 # Function to gather basic setup info
 setup() {
-    read -p "Enter the hostname (eg: my-container): " _hostname
-    read -p "Enter the number of CPU cores (eg: 2): " _cores
-    read -p "Enter the amount of RAM (in MB): " _memory
-    read -p "Enter the root disk size (in GB): " _disksize
-
-    HOSTNAME="--hostname $_hostname"
-    CORES="--cores $_cores"
-    MEMORY="--memory $_memory"
-    DISKSIZE="--rootfs ${_disksize}G"
+    read -p "Enter the hostname (eg: my-container): " HOSTNAME
+    read -p "Enter the number of CPU cores (eg: 2): " CORES
+    read -p "Enter the amount of RAM (in MB): " MEMORY
+    read -p "Enter the root disk size (in GB): " DISKSIZE
 }
 
 # Function to get and confirm VMID
@@ -53,7 +48,8 @@ vmid() {
 
 # Pick a storage location for the container image
 storage() {
-    options=($(pvesm status | awk '$2 ~ /dir|lvmthin|zfspool|btrfs|cephfs|rbd/ {print $1}'))
+    options=($(pvesm status | awk '$2 ~ /dir|lvmthin|zfspool|btrfs|cephfs|rbd|nfs|cifs/ {print $1}'))
+
 
     if [ ${#options[@]} -eq 0 ]; then
         echo "No valid storage backends found for container images."
@@ -67,7 +63,7 @@ storage() {
 
     read -p "Select storage [1-${#options[@]}]: " choice
     if [[ "$choice" =~ ^[0-9]+$ ]] && [ "$choice" -ge 1 ] && [ "$choice" -le "${#options[@]}" ]; then
-        STORAGE="--storage ${options[$((choice-1))]}"
+        STORAGE=${options[$((choice-1))]}
         echo "Selected storage: $STORAGE"
     else
         echo "Invalid choice."
@@ -98,7 +94,7 @@ template() {
     done
 
     read -p "Select a template number: " choice
-    TEMPLATE="--ostemplate ${templates[$choice]}"
+    TEMPLATE=${templates[$choice]}
     echo "Selected TEMPLATE: $TEMPLATE"
 }
 
@@ -122,7 +118,7 @@ bridge() {
         echo "Auto-selected bridge: $BRIDGE"
     else
         read -rp "Select a bridge [1-${#bridges[@]}]: " choice
-        BRIDGE="--net0 name=eth0,bridge=${bridges[$((choice-1))]}"
+        BRIDGE="name=eth0,bridge=${bridges[$((choice-1))]}"
         echo "Selected bridge: $BRIDGE"
     fi
 }
@@ -131,16 +127,16 @@ bridge() {
 options() {
     read -p "Should the container be privileged? (y/n) [n]: " priv
     if [[ "$priv" =~ ^[Yy]$ ]]; then
-        PRIVILEGE="--unprivileged 0"
+        PRIVILEGE="0"
     else
-        PRIVILEGE="--unprivileged 1"
+        PRIVILEGE="1"
     fi
 
     read -p "Enable nesting? (y/n) [n]: " nest
     if [[ "$nest" =~ ^[Yy]$ ]]; then
-        NESTING="--features nesting=1"
+        NESTING="1"
     else
-        NESTING="--features nesting=0"
+        NESTING="0"
     fi
 
     while true; do
@@ -151,7 +147,7 @@ options() {
         if [[ "$pass1" == "$pass2" && -n "$pass1" ]]; then
             # Escape $ for safe shell parsing
             pass1=${pass1//$/\\$}
-            ROOTPASSWORD="--password $pass1"
+            ROOTPASSWORD=$pass1
             break
         else
             echo "Passwords do not match or are empty. Please try again."
