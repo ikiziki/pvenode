@@ -15,18 +15,20 @@ declare ROOTPASSWORD
 
 # Function to gather basic setup info
 setup() {
-    read -p "Enter the hostname (eg: my-container): " HOSTNAME
-    read -p "Enter the number of CPU cores (eg: 2): " CORES
-    read -p "Enter the amount of RAM (in MB): " MEMORY
-    read -p "Enter the root disk size (in GB): " DISKSIZE
+    read -p "Enter the hostname (eg: my-container): " _hostname
+    read -p "Enter the number of CPU cores (eg: 2): " _cores
+    read -p "Enter the amount of RAM (in MB): " _memory
+    read -p "Enter the root disk size (in GB): " _disksize
+
+    HOSTNAME="--hostname $_hostname"
+    CORES="--cores $_cores"
+    MEMORY="--memory $_memory"
+    DISKSIZE="--rootfs ${_disksize}G"
 }
 
 # Function to get and confirm VMID
 vmid() {
-    # Get the next available VMID
     DEFAULT_VMID=$(pvesh get /cluster/nextid)
-
-    # Prompt user (Enter = accept default)
     read -p "Next available VMID is $DEFAULT_VMID. Press Enter to accept or type a custom VMID: " CUSTOM_VMID
 
     if [[ -z "$CUSTOM_VMID" ]]; then
@@ -51,7 +53,6 @@ vmid() {
 
 # Pick a storage location for the container image
 storage() {
-    # Get available storage backends that support container images
     options=($(pvesm status | awk '$2 ~ /dir|lvmthin|zfspool|btrfs|cephfs|rbd/ {print $1}'))
 
     if [ ${#options[@]} -eq 0 ]; then
@@ -64,11 +65,9 @@ storage() {
         echo "$((i+1)). ${options[$i]}"
     done
 
-    # Prompt user
     read -p "Select storage [1-${#options[@]}]: " choice
-
     if [[ "$choice" =~ ^[0-9]+$ ]] && [ "$choice" -ge 1 ] && [ "$choice" -le "${#options[@]}" ]; then
-        STORAGE="${options[$((choice-1))]}"
+        STORAGE="--storage ${options[$((choice-1))]}"
         echo "Selected storage: $STORAGE"
     else
         echo "Invalid choice."
@@ -83,30 +82,26 @@ template() {
     templates=()
     template_storage=()
     display=()
-    
+
     for store in $(pvesm status --content vztmpl | awk 'NR>1 {print $1}'); do
         while read -r line; do
-            tmpl_file=$(echo "$line" | awk '{print $1}')  # first column = template name
+            tmpl_file=$(echo "$line" | awk '{print $1}')
             if [[ -n "$tmpl_file" ]]; then
-                templates+=("$tmpl_file")                  # template filename only
-                template_storage+=("$store")               # storage where the template is
-                tmpl_name="${tmpl_file%%.*}"               # strip extension for display
-                display+=("$tmpl_name")                    # display only template name
+                templates+=("$tmpl_file")
+                template_storage+=("$store")
+                tmpl_name="${tmpl_file%%.*}"
+                display+=("$tmpl_name")
             fi
         done < <(pveam list "$store" | awk 'NR>1')
     done
 
-    # Show list
     for i in "${!display[@]}"; do
         echo "[$i] ${display[$i]}"
     done
 
-    # Prompt user
     read -p "Select a template number: " choice
-    TEMPLATE="${templates[$choice]}"
-    TEMPLATE_STORAGE="${template_storage[$choice]}"
-
-    echo "Selected TEMPLATE: $TEMPLATE (Storage: $TEMPLATE_STORAGE)"
+    TEMPLATE="--ostemplate ${template_storage[$choice]}:vztmpl/${templates[$choice]}"
+    echo "Selected TEMPLATE: $TEMPLATE"
 }
 
 # Pick a network bridge
@@ -120,17 +115,16 @@ bridge() {
         fi
     done
 
-    # Show numbered list
     for i in "${!bridges[@]}"; do
         printf " [%d] %s\n" "$((i+1))" "${bridges[$i]}"
     done
 
     if [[ ${#bridges[@]} -eq 1 ]]; then
-        BRIDGE=${bridges[0]}
+        BRIDGE="--net0 name=eth0,bridge=${bridges[0]}"
         echo "Auto-selected bridge: $BRIDGE"
     else
         read -rp "Select a bridge [1-${#bridges[@]}]: " choice
-        BRIDGE=${bridges[$((choice-1))]}
+        BRIDGE="--net0 name=eth0,bridge=${bridges[$((choice-1))]}"
         echo "Selected bridge: $BRIDGE"
     fi
 }
@@ -146,9 +140,9 @@ options() {
 
     read -p "Enable nesting? (y/n) [n]: " nest
     if [[ "$nest" =~ ^[Yy]$ ]]; then
-        NESTING="--nesting=1"
+        NESTING="--features nesting=1"
     else
-        NESTING="--nesting=0"
+        NESTING="--features nesting=0"
     fi
 
     while true; do
@@ -157,7 +151,7 @@ options() {
         read -s -p "Confirm root password: " pass2
         echo
         if [[ "$pass1" == "$pass2" && -n "$pass1" ]]; then
-            ROOTPASSWORD="-password $pass1"
+            ROOTPASSWORD="--password $pass1"
             break
         else
             echo "Passwords do not match or are empty. Please try again."
@@ -185,7 +179,7 @@ options
 create
 config
 
-echo "Container $VMID ($HOSTNAME) created successfully with the following configuration:"
+echo "Container $VMID created successfully with the following configuration:"
 echo "hostname  : $HOSTNAME"
 echo "vmid      : $VMID"
 echo "cores     : $CORES"
