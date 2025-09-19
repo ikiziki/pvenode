@@ -155,12 +155,12 @@ options() {
 
 # Create the container
 create() {
-    :
+    echo "Creating container with VMID $VMID..."
 }
 
 # Configure the container
 config() {
-    :
+    echo "Configuring container with VMID $VMID..."
 }
 
 # Main Loop
