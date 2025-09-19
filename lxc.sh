@@ -100,7 +100,7 @@ template() {
     done
 
     read -p "Select a template number: " choice
-    TEMPLATE="--ostemplate ${template_storage[$choice]}:vztmpl/${templates[$choice]}"
+    TEMPLATE="--ostemplate ${template_storage[$choice]}:${templates[$choice]}"
     echo "Selected TEMPLATE: $TEMPLATE"
 }
 
@@ -151,7 +151,7 @@ options() {
         read -s -p "Confirm root password: " pass2
         echo
         if [[ "$pass1" == "$pass2" && -n "$pass1" ]]; then
-            ROOTPASSWORD="--password $pass1"
+            ROOTPASSWORD="--password '$pass1'"
             break
         else
             echo "Passwords do not match or are empty. Please try again."
