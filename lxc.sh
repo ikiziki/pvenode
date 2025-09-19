@@ -145,9 +145,7 @@ options() {
         read -s -p "Confirm root password: " pass2
         echo
         if [[ "$pass1" == "$pass2" && -n "$pass1" ]]; then
-            # Escape $ for safe shell parsing
-            pass1=${pass1//$/\\$}
-            ROOTPASSWORD=$pass1
+            ROOTPASSWORD="$pass1"
             break
         else
             echo "Passwords do not match or are empty. Please try again."
