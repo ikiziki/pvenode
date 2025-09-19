@@ -80,7 +80,6 @@ template() {
     echo "Scanning available container templates on this host:"
 
     templates=()
-    template_storage=()
     display=()
 
     for store in $(pvesm status --content vztmpl | awk 'NR>1 {print $1}'); do
@@ -88,7 +87,6 @@ template() {
             tmpl_file=$(echo "$line" | awk '{print $1}')
             if [[ -n "$tmpl_file" ]]; then
                 templates+=("$tmpl_file")
-                template_storage+=("$store")
                 tmpl_name="${tmpl_file%%.*}"
                 display+=("$tmpl_name")
             fi
@@ -100,7 +98,7 @@ template() {
     done
 
     read -p "Select a template number: " choice
-    TEMPLATE="--ostemplate ${template_storage[$choice]}:${templates[$choice]}"
+    TEMPLATE="--ostemplate ${templates[$choice]}"
     echo "Selected TEMPLATE: $TEMPLATE"
 }
 
@@ -151,7 +149,9 @@ options() {
         read -s -p "Confirm root password: " pass2
         echo
         if [[ "$pass1" == "$pass2" && -n "$pass1" ]]; then
-            ROOTPASSWORD="--password '$pass1'"
+            # Escape $ for safe shell parsing
+            pass1=${pass1//$/\\$}
+            ROOTPASSWORD="--password $pass1"
             break
         else
             echo "Passwords do not match or are empty. Please try again."
