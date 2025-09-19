@@ -168,7 +168,6 @@ review() {
     echo "Reviewing container setup..."
     echo "VMID      : $VMID"
     echo "hostname  : $HOSTNAME"
-    echo "vmid      : $VMID"
     echo "cores     : $CORES"
     echo "memory    : $MEMORY"
     echo "disk size : $DISKSIZE"
