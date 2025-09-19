@@ -56,24 +56,24 @@ storage() {
         return 1
     fi
 
-    echo "Available storage backends:"
+    echo "Available storage targets:"
     for i in "${!options[@]}"; do
         echo "$((i+1)). ${options[$i]}"
     done
 
-    read -p "Select storage [1-${#options[@]}]: " choice
+    read -p "Select target [1-${#options[@]}]: " choice
     if [[ "$choice" =~ ^[0-9]+$ ]] && [ "$choice" -ge 1 ] && [ "$choice" -le "${#options[@]}" ]; then
         STORAGE=${options[$((choice-1))]}
         echo "Selected storage: $STORAGE"
     else
-        echo "Invalid choice."
+        echo "Invalid target."
         return 1
     fi
 }
 
 # Pick a template for the container
 template() {
-    echo "Scanning available container templates on this host:"
+    echo "Scanning for available container templates:"
 
     templates=()
     display=()
@@ -95,7 +95,7 @@ template() {
 
     read -p "Select a template number: " choice
     TEMPLATE=${templates[$choice]}
-    echo "Selected TEMPLATE: $TEMPLATE"
+    echo "Selected template: $TEMPLATE"
 }
 
 # Pick a network bridge
