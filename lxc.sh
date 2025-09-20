@@ -155,28 +155,75 @@ options() {
 
 # Create the container
 create() {
-    echo "Creating container with VMID $VMID..."
-}
-
-# Configure the container
-config() {
-    echo "Configuring container with VMID $VMID..."
-}
-
-# Review the container setup
-review() {
-    echo "Reviewing container setup..."
+    echo
+    echo "================================================="
+    echo " Review container configuration:"
+    echo "================================================="
     echo "VMID      : $VMID"
     echo "hostname  : $HOSTNAME"
     echo "cores     : $CORES"
     echo "memory    : $MEMORY"
-    echo "disk size : $DISKSIZE"
+    echo "disk size : ${DISKSIZE}G"
     echo "storage   : $STORAGE"
     echo "bridge    : $BRIDGE"
     echo "template  : $TEMPLATE"
     echo "privileged: $PRIVILEGE"
     echo "nesting   : $NESTING"
-    echo "root pass : $ROOTPASSWORD"
+    echo "================================================="
+    echo
+
+    read -p "Proceed with container creation? (y/n): " confirm
+    if [[ ! "$confirm" =~ ^[Yy]$ ]]; then
+        echo "Container creation aborted."
+        exit 1
+    fi
+
+    echo "Creating container with VMID $VMID..."
+    pct create "$VMID" "$TEMPLATE" \
+        -hostname "$HOSTNAME" \
+        -cores "$CORES" \
+        -memory "$MEMORY" \
+        -rootfs "${STORAGE}:${DISKSIZE}" \
+        -net0 "$BRIDGE" \
+        -password "$ROOTPASSWORD" \
+        -unprivileged "$PRIVILEGE" \
+        -features nesting="$NESTING"
+
+    if [[ $? -eq 0 ]]; then
+        echo "Container $VMID created successfully."
+    else
+        echo "Error: Container creation failed."
+        exit 1
+    fi
+}
+
+# Configure the container
+config() {
+    echo "Configuring container with VMID $VMID..."
+
+    # Update and upgrade packages first
+    pct exec "$VMID" -- bash -c "apt-get update && apt-get -y upgrade"
+
+    # Enable root SSH login
+    pct exec "$VMID" -- sed -i 's/^#\?PermitRootLogin.*/PermitRootLogin yes/' /etc/ssh/sshd_config
+    pct exec "$VMID" -- systemctl restart sshd
+
+    # Clear /etc/update-motd.d
+    pct exec "$VMID" -- rm -f /etc/update-motd.d/*
+
+    # Ask about Docker
+    read -p "Install Docker inside container $VMID? (y/n): " install_docker
+    if [[ "$install_docker" =~ ^[Yy]$ ]]; then
+        pct exec "$VMID" -- bash -c "apt-get install -y curl gnupg2 ca-certificates lsb-release"
+        pct exec "$VMID" -- bash -c "curl -fsSL https://get.docker.com | sh"
+        echo "Docker installed on container $VMID."
+    else
+        echo "Skipped Docker installation."
+    fi
+
+    # Print MAC address of container interface
+    echo "Assigned MAC address for eth0 in container $VMID:"
+    pct config "$VMID" | awk -F'[,=]' '/^net0:/ {for(i=1;i<=NF;i++) if($i~/hwaddr/) print $(i+1)}'
 }
 
 
@@ -189,4 +236,3 @@ bridge
 options
 create
 config
-review
