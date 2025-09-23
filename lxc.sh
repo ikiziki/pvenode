@@ -217,8 +217,25 @@ config() {
         pct exec "$VMID" -- bash -c "apt-get install -y curl gnupg2 ca-certificates lsb-release"
         pct exec "$VMID" -- bash -c "curl -fsSL https://get.docker.com | sh"
         echo "Docker installed on container $VMID."
+
+        # Ask about Portainer Agent
+        read -p "Install Portainer Agent inside container $VMID? (y/n): " install_portainer
+        if [[ "$install_portainer" =~ ^[Yy]$ ]]; then
+            pct exec "$VMID" -- mkdir -p /opt/agent
+            pct exec "$VMID" -- docker run -d \
+                -p 9001:9001 \
+                --name portainer_agent \
+                --restart=always \
+                -v /var/run/docker.sock:/var/run/docker.sock \
+                -v /opt/agent:/data \
+                -v /var/lib/docker/volumes:/var/lib/docker/volumes \
+                portainer/agent:latest
+            echo "Portainer Agent installed on container $VMID (bind-mounted to /opt/agent, listening on port 9001)."
+        else
+            echo "Skipped Portainer Agent installation."
+        fi
     else
-        echo "Skipped Docker installation."
+        echo "Skipped Docker installation (Portainer Agent requires Docker)."
     fi
 
     # Print MAC address of container interface
