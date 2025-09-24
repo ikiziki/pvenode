@@ -2,14 +2,14 @@
 # A streamlined LXC creation script for Proxmox VE with colors and style
 
 # ---------- Colors ----------
-RED="\e[0;31m"
-GREEN="\e[0;32m"
-YELLOW="\e[1;33m"
-BLUE="\e[0;34m"
-MAGENTA="\e[0;35m"
-CYAN="\e[0;36m"
-BOLD="\e[1m"
-RESET="\e[0m"
+RED="\033[0;31m"
+GREEN="\033[0;32m"
+YELLOW="\033[1;33m"
+BLUE="\033[0;34m"
+MAGENTA="\033[0;35m"
+CYAN="\033[0;36m"
+BOLD="\033[1m"
+RESET="\033[0m"
 
 print_info()    { echo -e "${CYAN}[INFO]${RESET} $*"; }
 print_warn()    { echo -e "${YELLOW}[WARN]${RESET} $*"; }
@@ -20,14 +20,6 @@ print_header()  { echo -e "\n${BOLD}${MAGENTA}==== $* ====${RESET}\n"; }
 # ---------- Variables ----------
 declare VMID HOSTNAME CORES MEMORY DISKSIZE STORAGE BRIDGE TEMPLATE PRIVILEGE NESTING ROOTPASSWORD
 
-# ---------- Functions ----------
-setup() {
-    print_header "Basic Setup"
-    read -p "${BOLD}Enter the hostname${RESET} (eg: my-container): " HOSTNAME
-    read -p "${BOLD}Enter the number of CPU cores${RESET} (eg: 2): " CORES
-    read -p "${BOLD}Enter the amount of RAM${RESET} (in MB): " MEMORY
-    read -p "${BOLD}Enter the root disk size${RESET} (in GB): " DISKSIZE
-}
 # ---------- Functions ----------
 setup() {
     print_header "Basic Setup"
