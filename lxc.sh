@@ -23,15 +23,15 @@ declare VMID HOSTNAME CORES MEMORY DISKSIZE STORAGE BRIDGE TEMPLATE PRIVILEGE NE
 # ---------- Functions ----------
 setup() {
     print_header "Basic Setup"
-    read -p "$(echo -e ${BOLD}Enter the hostname${RESET} (eg: my-container): ) " HOSTNAME
-    read -p "$(echo -e ${BOLD}Enter the number of CPU cores${RESET} (eg: 2): ) " CORES
-    read -p "$(echo -e ${BOLD}Enter the amount of RAM${RESET} (in MB): ) " MEMORY
-    read -p "$(echo -e ${BOLD}Enter the root disk size${RESET} (in GB): ) " DISKSIZE
+    read -p "${BOLD}Enter the hostname${RESET} (eg: my-container): " HOSTNAME
+    read -p "${BOLD}Enter the number of CPU cores${RESET} (eg: 2): " CORES
+    read -p "${BOLD}Enter the amount of RAM${RESET} (in MB): " MEMORY
+    read -p "${BOLD}Enter the root disk size${RESET} (in GB): " DISKSIZE
 }
 
 vmid() {
     DEFAULT_VMID=$(pvesh get /cluster/nextid)
-    read -p "$(echo -e ${BOLD}Next available VMID${RESET} is $DEFAULT_VMID. Press Enter to accept or type a custom VMID: ) " CUSTOM_VMID
+    read -p "${BOLD}Next available VMID${RESET} is $DEFAULT_VMID. Press Enter to accept or type a custom VMID: " CUSTOM_VMID
 
     if [[ -z "$CUSTOM_VMID" ]]; then
         VMID="$DEFAULT_VMID"
