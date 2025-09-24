@@ -1,52 +1,37 @@
 #!/usr/bin/env bash
-# A streamlined LXC creation script for Proxmox VE with colors and style
-
-# ---------- Colors ----------
-RED='\e[0;31m'
-GREEN='\e[0;32m'
-YELLOW='\e[1;33m'
-BLUE='\e[0;34m'
-MAGENTA='\e[0;35m'
-CYAN='\e[0;36m'
-BOLD='\e[1m'
-RESET='\e[0m'
-
-print_info()    { echo -e "${CYAN}[INFO]${RESET} $*"; }
-print_warn()    { echo -e "${YELLOW}[WARN]${RESET} $*"; }
-print_error()   { echo -e "${RED}[ERROR]${RESET} $*"; }
-print_success() { echo -e "${GREEN}[OK]${RESET} $*"; }
-print_header()  { echo -e "\n${BOLD}${MAGENTA}==== $* ====${RESET}\n"; }
+# A streamlined LXC creation script for Proxmox VE
 
 # ---------- Variables ----------
 declare VMID HOSTNAME CORES MEMORY DISKSIZE STORAGE BRIDGE TEMPLATE PRIVILEGE NESTING ROOTPASSWORD
 
 # ---------- Functions ----------
 setup() {
-    print_header "Basic Setup"
-    read -p "${BOLD}Enter the hostname${RESET} (eg: my-container): " HOSTNAME
-    read -p "${BOLD}Enter the number of CPU cores${RESET} (eg: 2): " CORES
-    read -p "${BOLD}Enter the amount of RAM${RESET} (in MB): " MEMORY
-    read -p "${BOLD}Enter the root disk size${RESET} (in GB): " DISKSIZE
+    echo ""
+    echo "==== Basic Setup ===="
+    read -p "Enter the hostname (eg: my-container): " HOSTNAME
+    read -p "Enter the number of CPU cores (eg: 2): " CORES
+    read -p "Enter the amount of RAM (in MB): " MEMORY
+    read -p "Enter the root disk size (in GB): " DISKSIZE
 }
 
 vmid() {
     DEFAULT_VMID=$(pvesh get /cluster/nextid)
-    read -p "${BOLD}Next available VMID${RESET} is $DEFAULT_VMID. Press Enter to accept or type a custom VMID: " CUSTOM_VMID
+    read -p "Next available VMID is $DEFAULT_VMID. Press Enter to accept or type a custom VMID: " CUSTOM_VMID
 
     if [[ -z "$CUSTOM_VMID" ]]; then
         VMID="$DEFAULT_VMID"
-        print_success "Assigned VMID: $VMID"
+        echo "Assigned VMID: $VMID"
     else
         while true; do
             if pvesh get /cluster/resources --type vm | awk '{print $2}' | grep -qw "$CUSTOM_VMID"; then
-                print_error "VMID $CUSTOM_VMID is already in use."
+                echo "VMID $CUSTOM_VMID is already in use."
                 read -p "Enter custom VMID: " CUSTOM_VMID
             elif [[ ! "$CUSTOM_VMID" =~ ^[0-9]+$ ]]; then
-                print_error "Invalid input. Please enter a numeric VMID."
+                echo "Invalid input. Please enter a numeric VMID."
                 read -p "Enter custom VMID: " CUSTOM_VMID
             else
                 VMID="$CUSTOM_VMID"
-                print_success "Using custom VMID: $VMID"
+                echo "Using custom VMID: $VMID"
                 break
             fi
         done
@@ -54,30 +39,32 @@ vmid() {
 }
 
 storage() {
-    print_header "Select Storage"
+    echo ""
+    echo "==== Select Storage ===="
     options=($(pvesm status | awk '$2 ~ /dir|lvmthin|zfspool|btrfs|cephfs|rbd|nfs|cifs/ {print $1}'))
 
     if [ ${#options[@]} -eq 0 ]; then
-        print_error "No valid storage backends found for container images."
+        echo "No valid storage backends found for container images."
         return 1
     fi
 
     for i in "${!options[@]}"; do
-        echo -e " ${CYAN}$((i+1)).${RESET} ${options[$i]}"
+        echo " $((i+1)). ${options[$i]}"
     done
 
     read -p "Select target [1-${#options[@]}]: " choice
     if [[ "$choice" =~ ^[0-9]+$ ]] && [ "$choice" -ge 1 ] && [ "$choice" -le "${#options[@]}" ]; then
         STORAGE=${options[$((choice-1))]}
-        print_success "Selected storage: $STORAGE"
+        echo "Selected storage: $STORAGE"
     else
-        print_error "Invalid target."
+        echo "Invalid target."
         return 1
     fi
 }
 
 template() {
-    print_header "Select Template"
+    echo ""
+    echo "==== Select Template ===="
     templates=()
     display=()
 
@@ -93,16 +80,17 @@ template() {
     done
 
     for i in "${!display[@]}"; do
-        echo -e " ${CYAN}[$i]${RESET} ${display[$i]}"
+        echo " [$i] ${display[$i]}"
     done
 
     read -p "Select a template number: " choice
     TEMPLATE=${templates[$choice]}
-    print_success "Selected template: $TEMPLATE"
+    echo "Selected template: $TEMPLATE"
 }
 
 bridge() {
-    print_header "Select Network Bridge"
+    echo ""
+    echo "==== Select Network Bridge ===="
     bridges=()
     for dev in /sys/class/net/*; do
         iface=$(basename "$dev")
@@ -112,21 +100,22 @@ bridge() {
     done
 
     for i in "${!bridges[@]}"; do
-        echo -e " ${CYAN}[$((i+1))]${RESET} ${bridges[$i]}"
+        echo " [$((i+1))] ${bridges[$i]}"
     done
 
     if [[ ${#bridges[@]} -eq 1 ]]; then
         BRIDGE="--net0 name=eth0,bridge=${bridges[0]}"
-        print_success "Auto-selected bridge: $BRIDGE"
+        echo "Auto-selected bridge: $BRIDGE"
     else
         read -rp "Select a bridge [1-${#bridges[@]}]: " choice
         BRIDGE="name=eth0,bridge=${bridges[$((choice-1))]}"
-        print_success "Selected bridge: $BRIDGE"
+        echo "Selected bridge: $BRIDGE"
     fi
 }
 
 options() {
-    print_header "Container Options"
+    echo ""
+    echo "==== Container Options ===="
     read -p "Should the container be privileged? (y/n) [n]: " priv
     [[ "$priv" =~ ^[Yy]$ ]] && PRIVILEGE="0" || PRIVILEGE="1"
 
@@ -140,32 +129,33 @@ options() {
             ROOTPASSWORD="$pass1"
             break
         else
-            print_warn "Passwords do not match or are empty. Please try again."
+            echo "Passwords do not match or are empty. Please try again."
         fi
     done
 }
 
 create() {
-    print_header "Review Container Configuration"
-    echo -e "${BOLD}VMID      :${RESET} $VMID"
-    echo -e "${BOLD}hostname  :${RESET} $HOSTNAME"
-    echo -e "${BOLD}cores     :${RESET} $CORES"
-    echo -e "${BOLD}memory    :${RESET} $MEMORY"
-    echo -e "${BOLD}disk size :${RESET} ${DISKSIZE}G"
-    echo -e "${BOLD}storage   :${RESET} $STORAGE"
-    echo -e "${BOLD}bridge    :${RESET} $BRIDGE"
-    echo -e "${BOLD}template  :${RESET} $TEMPLATE"
-    echo -e "${BOLD}privileged:${RESET} $PRIVILEGE"
-    echo -e "${BOLD}nesting   :${RESET} $NESTING"
+    echo ""
+    echo "==== Review Container Configuration ===="
+    echo "VMID      : $VMID"
+    echo "hostname  : $HOSTNAME"
+    echo "cores     : $CORES"
+    echo "memory    : $MEMORY"
+    echo "disk size : ${DISKSIZE}G"
+    echo "storage   : $STORAGE"
+    echo "bridge    : $BRIDGE"
+    echo "template  : $TEMPLATE"
+    echo "privileged: $PRIVILEGE"
+    echo "nesting   : $NESTING"
     echo
 
     read -p "Proceed with container creation? (y/n): " confirm
     if [[ ! "$confirm" =~ ^[Yy]$ ]]; then
-        print_warn "Container creation aborted."
+        echo "Container creation aborted."
         exit 1
     fi
 
-    print_info "Creating container with VMID $VMID..."
+    echo "Creating container with VMID $VMID..."
     pct create "$VMID" "$TEMPLATE" \
         -hostname "$HOSTNAME" \
         -cores "$CORES" \
@@ -177,16 +167,17 @@ create() {
         -features nesting="$NESTING"
 
     if [[ $? -eq 0 ]]; then
-        print_success "Container $VMID created successfully."
+        echo "Container $VMID created successfully."
     else
-        print_error "Container creation failed."
+        echo "Container creation failed."
         exit 1
     fi
 }
 
 config() {
-    print_header "Post-Configuration"
-    print_info "Configuring container with VMID $VMID..."
+    echo ""
+    echo "==== Post-Configuration ===="
+    echo "Configuring container with VMID $VMID..."
 
     pct exec "$VMID" -- bash -c "apt-get update && apt-get -y upgrade"
     pct exec "$VMID" -- sed -i 's/^#\?PermitRootLogin.*/PermitRootLogin yes/' /etc/ssh/sshd_config
@@ -197,7 +188,7 @@ config() {
     if [[ "$install_docker" =~ ^[Yy]$ ]]; then
         pct exec "$VMID" -- bash -c "apt-get install -y curl gnupg2 ca-certificates lsb-release"
         pct exec "$VMID" -- bash -c "curl -fsSL https://get.docker.com | sh"
-        print_success "Docker installed on container $VMID."
+        echo "Docker installed on container $VMID."
 
         read -p "Install Portainer Agent inside container $VMID? (y/n): " install_portainer
         if [[ "$install_portainer" =~ ^[Yy]$ ]]; then
@@ -210,15 +201,15 @@ config() {
                 -v /opt/agent:/data \
                 -v /var/lib/docker/volumes:/var/lib/docker/volumes \
                 portainer/agent:latest
-            print_success "Portainer Agent installed on container $VMID."
+            echo "Portainer Agent installed on container $VMID."
         else
-            print_warn "Skipped Portainer Agent installation."
+            echo "Skipped Portainer Agent installation."
         fi
     else
-        print_warn "Skipped Docker installation."
+        echo "Skipped Docker installation."
     fi
 
-    echo -e "${BOLD}Assigned MAC address for eth0:${RESET}"
+    echo "Assigned MAC address for eth0:"
     pct config "$VMID" | awk -F'[,=]' '/^net0:/ {for(i=1;i<=NF;i++) if($i~/hwaddr/) print $(i+1)}'
 }
 
