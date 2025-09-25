@@ -168,6 +168,14 @@ create() {
 
     if [[ $? -eq 0 ]]; then
         echo "Container $VMID created successfully."
+        echo "Starting container $VMID..."
+        pct start "$VMID"
+        if [[ $? -eq 0 ]]; then
+            echo "Container $VMID started successfully."
+        else
+            echo "Failed to start container $VMID."
+            exit 1
+        fi
     else
         echo "Container creation failed."
         exit 1
