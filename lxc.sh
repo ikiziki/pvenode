@@ -187,19 +187,33 @@ config() {
     echo "==== Post-Configuration ===="
     echo "Configuring container with VMID $VMID..."
 
-    pct exec "$VMID" -- bash -c "apt-get update && apt-get -y upgrade"
+    echo "Updating and upgrading container..."
+    pct exec "$VMID" -- bash -c "apt update && apt upgrade -y"
+
+    echo "Enabling root SSH login..."
     pct exec "$VMID" -- sed -i 's/^#\?PermitRootLogin.*/PermitRootLogin yes/' /etc/ssh/sshd_config
     pct exec "$VMID" -- systemctl restart sshd
+
+    echo "Removing default MOTD scripts..."
     pct exec "$VMID" -- rm -f /etc/update-motd.d/*
 
     read -p "Install Docker inside container $VMID? (y/n): " install_docker
     if [[ "$install_docker" =~ ^[Yy]$ ]]; then
-        pct exec "$VMID" -- bash -c "apt-get install -y curl gnupg2 ca-certificates lsb-release"
-        pct exec "$VMID" -- bash -c "curl -fsSL https://get.docker.com | sh"
-        echo "Docker installed on container $VMID."
+        echo "Installing Docker prerequisites..."
+        pct exec "$VMID" -- bash -c "apt install -y apt-transport-https ca-certificates curl gnupg lsb-release software-properties-common"
+
+        echo "Adding Docker GPG key and repository..."
+        pct exec "$VMID" -- bash -c "curl -fsSL https://download.docker.com/linux/$(. /etc/os-release && echo \$ID)/gpg | gpg --dearmor -o /usr/share/keyrings/docker-archive-keyring.gpg"
+        pct exec "$VMID" -- bash -c "echo 'deb [arch=$(dpkg --print-architecture) signed-by=/usr/share/keyrings/docker-archive-keyring.gpg] https://download.docker.com/linux/$(. /etc/os-release && echo \$ID) $(lsb_release -cs) stable' > /etc/apt/sources.list.d/docker.list"
+
+        echo "Installing Docker Engine and Compose plugin..."
+        pct exec "$VMID" -- bash -c "apt update && apt install -y docker-ce docker-ce-cli containerd.io docker-compose-plugin"
+
+        echo "Docker and Docker Compose plugin installed on container $VMID."
 
         read -p "Install Portainer Agent inside container $VMID? (y/n): " install_portainer
         if [[ "$install_portainer" =~ ^[Yy]$ ]]; then
+            echo "Setting up Portainer Agent..."
             pct exec "$VMID" -- mkdir -p /opt/agent
             pct exec "$VMID" -- docker run -d \
                 -p 9001:9001 \
@@ -217,8 +231,9 @@ config() {
         echo "Skipped Docker installation."
     fi
 
-    echo "Assigned MAC address for eth0:"
+    echo "Fetching assigned MAC address for eth0..."
     pct config "$VMID" | awk -F'[,=]' '/^net0:/ {for(i=1;i<=NF;i++) if($i~/hwaddr/) print $(i+1)}'
+    echo "Container post-configuration complete."
 }
 
 # ---------- Main ----------
