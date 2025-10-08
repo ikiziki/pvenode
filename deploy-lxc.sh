@@ -215,6 +215,3 @@ bridge
 options
 create
 config
-
-echo "Container $HOSTNAME (VMID $VMID) created successfully on $TARGET."
-echo "You can access it using: pct enter $VMID"
