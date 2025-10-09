@@ -35,7 +35,7 @@ TARGET_IP=${NODES[$TARGET]}
 # ---------- Remote Execution ----------
 if [[ "$CURRENT_HOST" != "$TARGET" ]]; then
     echo "Executing on remote node $TARGET ($TARGET_IP)..."
-    ssh root@"$TARGET_IP" "bash -s" <<'REMOTE_SCRIPT'
+    ssh -t root@"$TARGET_IP" "bash -s" <<'REMOTE_SCRIPT'
 #!/usr/bin/env bash
 
 # Change to script directory
