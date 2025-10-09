@@ -20,7 +20,5 @@ chmod +x lxc.sh
 echo -e "${GREEN}  lxc.sh is now executable.${RESET}"
 chmod +x pull.sh
 echo -e "${GREEN}  pull.sh is now executable.${RESET}"
-chmod +x toggle.sh
-echo -e "${GREEN}  toggle.sh is now executable.${RESET}"
 
 echo -e "${GREEN}Done!${RESET}"
