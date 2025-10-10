@@ -104,14 +104,15 @@ bridge() {
     done
 
     if [[ ${#bridges[@]} -eq 1 ]]; then
-        BRIDGE="--net0 name=eth0,bridge=${bridges[0]}"
-        echo "Auto-selected bridge: $BRIDGE"
+        BRIDGE="name=eth0,bridge=${bridges[0]},ip=dhcp"
+        echo "Auto-selected bridge: ${bridges[0]} (DHCP enabled)"
     else
         read -rp "Select a bridge [1-${#bridges[@]}]: " choice
-        BRIDGE="name=eth0,bridge=${bridges[$((choice-1))]}"
-        echo "Selected bridge: $BRIDGE"
+        BRIDGE="name=eth0,bridge=${bridges[$((choice-1))]},ip=dhcp"
+        echo "Selected bridge: ${bridges[$((choice-1))]} (DHCP enabled)"
     fi
 }
+
 
 options() {
     echo ""
