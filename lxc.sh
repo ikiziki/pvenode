@@ -191,32 +191,27 @@ config() {
     echo "Updating and upgrading container..."
     pct exec "$VMID" -- bash -c "apt update && apt upgrade -y"
 
+    echo "Installing base utilities..."
+    pct exec "$VMID" -- apt install -y curl gnupg lsb-release ca-certificates apt-transport-https sudo
+
     echo "Enabling root SSH login..."
     pct exec "$VMID" -- sed -i 's/^#\?PermitRootLogin.*/PermitRootLogin yes/' /etc/ssh/sshd_config
     pct exec "$VMID" -- systemctl restart sshd
 
     echo "Removing default MOTD scripts..."
-    pct exec "$VMID" -- rm -f /etc/update-motd.d/*
-    pct exec "$VMID" -- rm -f /etc/motd
+    pct exec "$VMID" -- rm -f /etc/update-motd.d/* /etc/motd
 
     read -p "Install Docker inside container $VMID? (y/n): " install_docker
     if [[ "$install_docker" =~ ^[Yy]$ ]]; then
         echo "Updating package lists..."
         pct exec "$VMID" -- apt update
 
-        echo "Installing prerequisites..."
-        pct exec "$VMID" -- apt install -y \
-            apt-transport-https \
-            ca-certificates \
-            curl \
-            gnupg \
-            lsb-release \
-            software-properties-common \
-            sudo
+        echo "Installing Docker prerequisites..."
+        pct exec "$VMID" -- apt install -y apt-transport-https ca-certificates curl gnupg lsb-release sudo
 
         echo "Adding Docker GPG key and repository..."
-        pct exec "$VMID" -- bash -c "curl -fsSL https://download.docker.com/linux/$(. /etc/os-release && echo \$ID)/gpg | gpg --dearmor -o /usr/share/keyrings/docker-archive-keyring.gpg"
-        pct exec "$VMID" -- bash -c "echo 'deb [arch=$(dpkg --print-architecture) signed-by=/usr/share/keyrings/docker-archive-keyring.gpg] https://download.docker.com/linux/$(. /etc/os-release && echo \$ID) $(lsb_release -cs) stable' > /etc/apt/sources.list.d/docker.list"
+        pct exec "$VMID" -- bash -c "curl -fsSL https://download.docker.com/linux/\$(. /etc/os-release && echo \$ID)/gpg | gpg --dearmor -o /usr/share/keyrings/docker-archive-keyring.gpg"
+        pct exec "$VMID" -- bash -c "echo 'deb [arch=\$(dpkg --print-architecture) signed-by=/usr/share/keyrings/docker-archive-keyring.gpg] https://download.docker.com/linux/\$(. /etc/os-release && echo \$ID) \$(lsb_release -cs) stable' > /etc/apt/sources.list.d/docker.list"
 
         echo "Updating package lists again..."
         pct exec "$VMID" -- apt update
