@@ -210,8 +210,14 @@ config() {
         pct exec "$VMID" -- apt install -y apt-transport-https ca-certificates curl gnupg lsb-release sudo
 
         echo "Adding Docker GPG key and repository..."
-        pct exec "$VMID" -- bash -c "curl -fsSL https://download.docker.com/linux/\$(. /etc/os-release && echo \$ID)/gpg | gpg --dearmor -o /usr/share/keyrings/docker-archive-keyring.gpg"
-        pct exec "$VMID" -- bash -c "echo 'deb [arch=\$(dpkg --print-architecture) signed-by=/usr/share/keyrings/docker-archive-keyring.gpg] https://download.docker.com/linux/\$(. /etc/os-release && echo \$ID) \$(lsb_release -cs) stable' > /etc/apt/sources.list.d/docker.list"
+        pct exec "$VMID" -- bash -c '
+set -e
+source /etc/os-release
+ARCH=$(dpkg --print-architecture)
+CODENAME=$(lsb_release -cs)
+curl -fsSL https://download.docker.com/linux/$ID/gpg | gpg --dearmor -o /usr/share/keyrings/docker-archive-keyring.gpg
+echo "deb [arch=$ARCH signed-by=/usr/share/keyrings/docker-archive-keyring.gpg] https://download.docker.com/linux/$ID $CODENAME stable" > /etc/apt/sources.list.d/docker.list
+'
 
         echo "Updating package lists again..."
         pct exec "$VMID" -- apt update
@@ -245,7 +251,6 @@ config() {
     pct config "$VMID" | awk -F'[,=]' '/^net0:/ {for(i=1;i<=NF;i++) if($i~/hwaddr/) print $(i+1)}'
     echo "Container post-configuration complete."
 }
-
 
 # ---------- Main ----------
 setup
