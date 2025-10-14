@@ -197,18 +197,32 @@ config() {
 
     echo "Removing default MOTD scripts..."
     pct exec "$VMID" -- rm -f /etc/update-motd.d/*
+    pct exec "$VMID" -- rm -f /etc/motd
 
     read -p "Install Docker inside container $VMID? (y/n): " install_docker
     if [[ "$install_docker" =~ ^[Yy]$ ]]; then
-        echo "Installing Docker prerequisites..."
-        pct exec "$VMID" -- bash -c "apt install -y apt-transport-https ca-certificates curl gnupg lsb-release software-properties-common"
+        echo "Updating package lists..."
+        pct exec "$VMID" -- apt update
+
+        echo "Installing prerequisites..."
+        pct exec "$VMID" -- apt install -y \
+            apt-transport-https \
+            ca-certificates \
+            curl \
+            gnupg \
+            lsb-release \
+            software-properties-common \
+            sudo
 
         echo "Adding Docker GPG key and repository..."
         pct exec "$VMID" -- bash -c "curl -fsSL https://download.docker.com/linux/$(. /etc/os-release && echo \$ID)/gpg | gpg --dearmor -o /usr/share/keyrings/docker-archive-keyring.gpg"
         pct exec "$VMID" -- bash -c "echo 'deb [arch=$(dpkg --print-architecture) signed-by=/usr/share/keyrings/docker-archive-keyring.gpg] https://download.docker.com/linux/$(. /etc/os-release && echo \$ID) $(lsb_release -cs) stable' > /etc/apt/sources.list.d/docker.list"
 
+        echo "Updating package lists again..."
+        pct exec "$VMID" -- apt update
+
         echo "Installing Docker Engine and Compose plugin..."
-        pct exec "$VMID" -- bash -c "apt update && apt install -y docker-ce docker-ce-cli containerd.io docker-compose-plugin"
+        pct exec "$VMID" -- apt install -y docker-ce docker-ce-cli containerd.io docker-compose-plugin
 
         echo "Docker and Docker Compose plugin installed on container $VMID."
 
