@@ -198,8 +198,18 @@ config() {
     pct exec "$VMID" -- sed -i 's/^#\?PermitRootLogin.*/PermitRootLogin yes/' /etc/ssh/sshd_config
     pct exec "$VMID" -- systemctl restart sshd
 
-    echo "Removing default MOTD scripts..."
-    pct exec "$VMID" -- rm -f /etc/update-motd.d/* /etc/motd
+		echo "Replacing default MOTD scripts..."
+		# Remove all default MOTD scripts except we'll handle 00-uname specifically
+		pct exec "$VMID" -- bash -c 'rm -f /etc/update-motd.d/*'
+		
+		# Remove 00-uname if it exists
+		pct exec "$VMID" -- bash -c 'rm -f /etc/update-motd.d/00-uname'
+		
+		# Copy in your custom MOTD script
+		pct exec "$VMID" -- bash -c 'cp /usr/local/sbin/pvenode/00-motd /etc/update-motd.d/00-motd && chmod +x /etc/update-motd.d/00-motd'
+		
+		# Clear contents of /etc/motd but keep the file
+		pct exec "$VMID" -- bash -c ': > /etc/motd'
 
     read -p "Install Docker inside container $VMID? (y/n): " install_docker
     if [[ "$install_docker" =~ ^[Yy]$ ]]; then

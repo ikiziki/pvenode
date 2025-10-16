@@ -1,0 +1,79 @@
+#!/bin/bash
+# Dynamic MOTD with hostname-framed header, OS/Proxmox detection, colorized warnings, aligned dividers
+
+# Colors
+RED="\e[31m"
+YELLOW="\e[33m"
+GREEN="\e[32m"
+CYAN="\e[36m"
+RESET="\e[0m"
+
+HOSTNAME=$(hostname)
+
+LOAD1=$(cut -d " " -f1 /proc/loadavg)
+LOADS=$(cut -d " " -f1-3 /proc/loadavg)
+UPTIME=$(uptime -p | sed 's/^up //')
+
+# Memory usage
+MEM_TOTAL=$(free -m | awk '/Mem:/ {print $2}')
+MEM_USED=$(free -m | awk '/Mem:/ {print $3}')
+MEM_PERCENT=$(( MEM_USED * 100 / MEM_TOTAL ))
+
+# Colorize memory usage
+if [ "$MEM_PERCENT" -ge 90 ]; then
+    MEM_COLOR=$RED
+elif [ "$MEM_PERCENT" -ge 70 ]; then
+    MEM_COLOR=$YELLOW
+else
+    MEM_COLOR=$GREEN
+fi
+
+# Colorize load
+if (( $(echo "$LOAD1 > 2" | bc -l) )); then
+    LOAD_COLOR=$RED
+elif (( $(echo "$LOAD1 > 1" | bc -l) )); then
+    LOAD_COLOR=$YELLOW
+else
+    LOAD_COLOR=$GREEN
+fi
+
+# OS / Proxmox info + updates
+if command -v pveversion >/dev/null 2>&1; then
+    OS_INFO=$(pveversion | head -n1)
+else
+    OS_INFO=$(grep '^PRETTY_NAME=' /etc/os-release | cut -d= -f2 | tr -d '"')
+fi
+
+# Refresh package index quietly
+apt-get -qq update >/dev/null 2>&1
+UPDATES=$(apt list --upgradable 2>/dev/null | grep -vc "Listing...")
+
+# Colorize updates
+if [ "$UPDATES" -eq 0 ]; then
+    UPDATE_COLOR=$GREEN
+elif [ "$UPDATES" -lt 10 ]; then
+    UPDATE_COLOR=$YELLOW
+else
+    UPDATE_COLOR=$RED
+fi
+
+# Build header line
+PREFIX="--------------------[ "
+SUFFIX=" ]--------------------"
+HEADER_CONTENT="${PREFIX}${HOSTNAME}${SUFFIX}"
+
+# Colorize header
+HEADER_LINE="${CYAN}${HEADER_CONTENT}${RESET}"
+
+# Build bottom divider of exact same visible length
+VISIBLE_LENGTH=${#HEADER_CONTENT}    # Count without color codes
+DIVIDER="${CYAN}$(printf '%*s' "$VISIBLE_LENGTH" '' | tr ' ' '-')${RESET}"
+
+# Output
+echo -e "$HEADER_LINE"
+echo -e " Load     : ${LOAD_COLOR}${LOADS}${RESET}"
+echo -e " Memory   : ${MEM_COLOR}${MEM_USED}M / ${MEM_TOTAL}M (${MEM_PERCENT}%)${RESET}"
+echo -e " Uptime   : ${GREEN}${UPTIME}${RESET}"
+echo -e " OS       : ${GREEN}${OS_INFO}${RESET}"
+echo -e " Updates  : ${UPDATE_COLOR}${UPDATES} available${RESET}"
+echo -e "$DIVIDER"
