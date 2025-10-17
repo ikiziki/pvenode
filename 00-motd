@@ -87,15 +87,47 @@ else
     fi
 fi
 
-# OS / Proxmox info
+# OS / Proxmox info (concise)
 if has pveversion; then
-    OS_INFO=$(pveversion | head -n1)
-else
-    if [[ -r /etc/os-release ]]; then
-        OS_INFO=$(grep '^PRETTY_NAME=' /etc/os-release | cut -d= -f2 | tr -d '"')
+    # pveversion prints multiple lines; the first typically contains build info.
+    # We'll extract the version number if possible and present a short form.
+    PVE_LINE=$(pveversion 2>/dev/null | head -n1 || true)
+    # try to capture something like 'pve-manager/7.2-10/...' -> show 'Proxmox VE 7.2'
+    if [[ "$PVE_LINE" =~ ([0-9]+\.[0-9]+) ]]; then
+        OS_INFO="Proxmox VE ${BASH_REMATCH[1]}"
     else
-        OS_INFO="unknown"
+        OS_INFO="Proxmox VE"
     fi
+elif [[ -r /etc/os-release ]]; then
+    # Prefer a short Debian version if possible
+    . /etc/os-release
+    if [[ "$ID" == "debian" || "$ID_LIKE" =~ debian ]]; then
+        # VERSION_ID is usually like '11' or '12'
+        if [[ -n "$VERSION_ID" ]]; then
+            OS_INFO="Debian ${VERSION_ID}"
+        else
+            OS_INFO="Debian"
+        fi
+    else
+        # Fallback to short PRETTY_NAME trimmed to first comma-delimited part
+        if [[ -n "$PRETTY_NAME" ]]; then
+            OS_INFO=${PRETTY_NAME%%,*}
+        else
+            OS_INFO="unknown"
+        fi
+    fi
+else
+    OS_INFO="unknown"
+fi
+
+# Kernel info (short)
+if has uname; then
+    # show kernel release and arch: '5.15.0-...' and 'x86_64'
+    KERNEL_REL=$(uname -r 2>/dev/null || echo unknown)
+    KERNEL_ARCH=$(uname -m 2>/dev/null || echo unknown)
+    KERNEL_INFO="${KERNEL_REL} ${KERNEL_ARCH}"
+else
+    KERNEL_INFO="unknown"
 fi
 
 # Updates: avoid running apt-get update on every login. Use cache if fresh,
@@ -166,5 +198,6 @@ else
 fi
 echo -e " Uptime   : ${GREEN}${UPTIME}${RESET}"
 echo -e " OS       : ${GREEN}${OS_INFO}${RESET}"
+echo -e " Kernel   : ${GREEN}${KERNEL_INFO}${RESET}"
 echo -e " Updates  : ${UPDATE_COLOR}${UPDATES_TEXT}${RESET}"
 echo -e "$DIVIDER"

@@ -147,4 +147,45 @@ for f in lxc.sh pull.sh 00-motd; do
 	fi
 done
 
+# If 00-motd was updated in the repo (or differs from installed), deploy it
+REPO_MOTD="00-motd"
+TARGET_DIR="/etc/update-motd.d"
+TARGET_MOTD="${TARGET_DIR}/00-motd"
+
+if [[ -f "${REPO_MOTD}" ]]; then
+	deploy_needed=0
+	if [[ -f "${TARGET_MOTD}" ]]; then
+		if ! cmp -s "${REPO_MOTD}" "${TARGET_MOTD}"; then
+			deploy_needed=1
+		fi
+	else
+		deploy_needed=1
+	fi
+
+	if [[ $deploy_needed -eq 1 ]]; then
+		echo -e "${YELLOW}Deploying updated 00-motd to ${TARGET_MOTD}${RESET}"
+
+		if [[ $(id -u) -eq 0 ]]; then
+			mkdir -p "${TARGET_DIR}" >/dev/null 2>&1 || true
+			cp "${REPO_MOTD}" "${TARGET_MOTD}"
+			chmod +x "${TARGET_MOTD}"
+			echo -e "${GREEN}Installed ${TARGET_MOTD}${RESET}"
+		else
+			if command -v sudo >/dev/null 2>&1; then
+				sudo mkdir -p "${TARGET_DIR}" >/dev/null 2>&1 || true
+				if sudo cp "${REPO_MOTD}" "${TARGET_MOTD}"; then
+					sudo chmod +x "${TARGET_MOTD}"
+					echo -e "${GREEN}Installed ${TARGET_MOTD} (via sudo)${RESET}"
+				else
+					echo -e "${RED}Failed to copy ${REPO_MOTD} to ${TARGET_MOTD} using sudo.${RESET}"
+				fi
+			else
+				echo -e "${RED}Need root privileges to install ${TARGET_MOTD}. Run as root or install sudo.${RESET}"
+			fi
+		fi
+	else
+		echo -e "${GREEN}${TARGET_MOTD} is up-to-date.${RESET}"
+	fi
+fi
+
 echo -e "${GREEN}Done!${RESET}"
