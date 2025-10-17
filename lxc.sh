@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Optimized Interactive LXC Creation Script for Proxmox VE (No Heredocs)
+# Optimized Interactive LXC Creation Script for Proxmox VE with Countdown Waits
 set -e
 
 # ---------- Variables ----------
@@ -9,6 +9,16 @@ declare VMID HOSTNAME CORES MEMORY DISKSIZE STORAGE BRIDGE TEMPLATE PRIVILEGE NE
 GREEN="\033[0;32m"; YELLOW="\033[1;33m"; RED="\033[0;31m"; RESET="\033[0m"
 
 # ---------- Functions ----------
+
+countdown() {
+    local seconds=$1
+    echo -ne "${YELLOW}Waiting ${seconds} seconds: "
+    for ((i=seconds; i>0; i--)); do
+        echo -ne "$i "
+        sleep 1
+    done
+    echo -e "${RESET}"
+}
 
 setup() {
     echo -e "\n==== Basic Setup ===="
@@ -131,22 +141,28 @@ EOF
 
     pct start "$VMID"
     echo -e "${GREEN}Container $VMID started.${RESET}"
+    countdown 5
 }
 
 config() {
     echo -e "\n==== Post-Configuration ===="
-
     echo "Updating and installing base tools..."
-    pct exec "$VMID" -- bash -c "set -e;
+    pct exec "$VMID" -- bash -c "
+        set -e;
         export DEBIAN_FRONTEND=noninteractive;
         apt-get -yq update;
         apt-get -yq upgrade;
+    "
+    countdown 5
+
+    pct exec "$VMID" -- bash -c "
         apt-get -yq install curl gnupg lsb-release ca-certificates apt-transport-https sudo;
         sed -i 's/^#\\?PermitRootLogin.*/PermitRootLogin yes/' /etc/ssh/sshd_config;
         systemctl restart sshd;
         rm -f /etc/update-motd.d/* /etc/update-motd.d/00-uname;
         : > /etc/motd
     "
+    countdown 2
 
     if [[ -f /usr/local/sbin/pvenode/00-motd ]]; then
         pct push "$VMID" /usr/local/sbin/pvenode/00-motd /etc/update-motd.d/00-motd
@@ -158,7 +174,7 @@ config() {
 
     read -rp "Install Docker? (y/n): " docker
     if [[ "$docker" =~ ^[Yy]$ ]]; then
-        pct exec "$VMID" -- bash -c "set -e;
+        pct exec "$VMID" -- bash -c "
             apt-get -yq update;
             apt-get -yq install apt-transport-https ca-certificates curl gnupg lsb-release sudo;
             source /etc/os-release;
@@ -167,19 +183,22 @@ config() {
             curl -fsSL https://download.docker.com/linux/\$ID/gpg | gpg --dearmor -o /usr/share/keyrings/docker-archive-keyring.gpg;
             echo \"deb [arch=\$ARCH signed-by=/usr/share/keyrings/docker-archive-keyring.gpg] https://download.docker.com/linux/\$ID \$CODENAME stable\" > /etc/apt/sources.list.d/docker.list;
             apt-get -yq update;
-            apt-get -yq install docker-ce docker-ce-cli containerd.io docker-compose-plugin
+            apt-get -yq install docker-ce docker-ce-cli containerd.io docker-compose-plugin;
         "
+        countdown 5
         echo -e "${GREEN}Docker installed.${RESET}"
 
         read -rp "Install Portainer Agent? (y/n): " portainer
         if [[ "$portainer" =~ ^[Yy]$ ]]; then
-            pct exec "$VMID" -- bash -c "mkdir -p /opt/agent;
+            pct exec "$VMID" -- bash -c "
+                mkdir -p /opt/agent;
                 docker run -d -p 9001:9001 --name portainer_agent --restart=always \
                     -v /var/run/docker.sock:/var/run/docker.sock \
                     -v /opt/agent:/data \
                     -v /var/lib/docker/volumes:/var/lib/docker/volumes \
                     portainer/agent:latest
             "
+            countdown 5
             echo -e "${GREEN}Portainer Agent installed.${RESET}"
         else
             echo "Skipped Portainer."
