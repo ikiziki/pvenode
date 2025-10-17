@@ -12,16 +12,29 @@ RESET="\e[0m"
 # Helpers: safe command checks
 has() { command -v "$1" >/dev/null 2>&1; }
 
+# If this script is executed under /bin/sh (or another non-bash shell)
+# re-exec it with bash so bash-specific syntax and regexes behave
+# as intended. This covers systems that may source or run the script
+# with a plain sh interpreter (some update-motd runners do that).
+if [ -z "${BASH_VERSION:-}" ] && [ -x "/bin/bash" ]; then
+    exec /bin/bash "$0" "$@"
+fi
+
 HOSTNAME=$(hostname 2>/dev/null || echo "$(cat /etc/hostname 2>/dev/null || echo unknown)")
 
 # Load averages (safe fallback)
-if [[ -r /proc/loadavg ]]; then
-    LOAD1=$(awk '{print $1}' /proc/loadavg)
-    LOADS=$(awk '{print $1, $2, $3}' /proc/loadavg)
+# Prefer reading /proc/loadavg using shell builtins to avoid external
+# command dependencies and to behave correctly when PATH is minimal.
+if [ -r /proc/loadavg ]; then
+    # 'read' will split on IFS (space) and capture first three fields.
+    # Some environments may not include newline at EOF; use 'cat <file' form.
+    read -r LOAD1 LOAD2 LOAD3 _ < /proc/loadavg || true
+    LOADS="${LOAD1:-0} ${LOAD2:-0} ${LOAD3:-0}"
 else
     if has uptime; then
-        LOAD1=$(uptime | awk -F'load average:' '{print $2}' | cut -d, -f1 | sed 's/^ *//')
+        # uptime output looks like: " 10:23:45 up 5 days,  1:23,  3 users,  load average: 0.00, 0.01, 0.05"
         LOADS=$(uptime | awk -F'load average:' '{print $2}' | sed 's/^ //')
+        LOAD1=$(printf "%s" "$LOADS" | cut -d, -f1 | sed 's/^ *//')
     else
         LOAD1=0
         LOADS="0, 0, 0"
