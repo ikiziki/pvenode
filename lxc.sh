@@ -198,18 +198,21 @@ config() {
     pct exec "$VMID" -- sed -i 's/^#\?PermitRootLogin.*/PermitRootLogin yes/' /etc/ssh/sshd_config
     pct exec "$VMID" -- systemctl restart sshd
 
-		echo "Replacing default MOTD scripts..."
-		# Remove all default MOTD scripts except we'll handle 00-uname specifically
-		pct exec "$VMID" -- bash -c 'rm -f /etc/update-motd.d/*'
-		
-		# Remove 00-uname if it exists
-		pct exec "$VMID" -- bash -c 'rm -f /etc/update-motd.d/00-uname'
-		
-		# Copy in your custom MOTD script
-		pct exec "$VMID" -- bash -c 'cp /usr/local/sbin/pvenode/00-motd /etc/update-motd.d/00-motd && chmod +x /etc/update-motd.d/00-motd'
-		
-		# Clear contents of /etc/motd but keep the file
-		pct exec "$VMID" -- bash -c ': > /etc/motd'
+    echo "Replacing default MOTD scripts..."
+    pct exec "$VMID" -- bash -c 'rm -f /etc/update-motd.d/*'
+    pct exec "$VMID" -- bash -c 'rm -f /etc/update-motd.d/00-uname'
+
+    # Check if custom MOTD file exists on host before attempting to push it
+    if [[ -f /usr/local/sbin/pvenode/00-motd ]]; then
+        echo "Copying custom MOTD script into container..."
+        pct push "$VMID" /usr/local/sbin/pvenode/00-motd /etc/update-motd.d/00-motd
+        pct exec "$VMID" -- chmod +x /etc/update-motd.d/00-motd
+    else
+        echo "WARNING: Custom MOTD script not found at /usr/local/sbin/pvenode/00-motd. Skipping MOTD setup."
+    fi
+
+    # Clear the contents of /etc/motd but retain the file
+    pct exec "$VMID" -- bash -c ': > /etc/motd'
 
     read -p "Install Docker inside container $VMID? (y/n): " install_docker
     if [[ "$install_docker" =~ ^[Yy]$ ]]; then
