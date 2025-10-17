@@ -137,7 +137,8 @@ config() {
     echo -e "\n==== Post-Configuration ===="
 
     echo "Updating and installing base tools..."
-    pct exec "$VMID" -- bash -c "set -e; export DEBIAN_FRONTEND=noninteractive;
+    pct exec "$VMID" -- bash -c "set -e;
+        export DEBIAN_FRONTEND=noninteractive;
         apt-get -yq update;
         apt-get -yq upgrade;
         apt-get -yq install curl gnupg lsb-release ca-certificates apt-transport-https sudo;
@@ -164,7 +165,7 @@ config() {
             ARCH=\$(dpkg --print-architecture);
             CODENAME=\$(lsb_release -cs);
             curl -fsSL https://download.docker.com/linux/\$ID/gpg | gpg --dearmor -o /usr/share/keyrings/docker-archive-keyring.gpg;
-            echo 'deb [arch=\$ARCH signed-by=/usr/share/keyrings/docker-archive-keyring.gpg] https://download.docker.com/linux/\$ID \$CODENAME stable' > /etc/apt/sources.list.d/docker.list;
+            echo \"deb [arch=\$ARCH signed-by=/usr/share/keyrings/docker-archive-keyring.gpg] https://download.docker.com/linux/\$ID \$CODENAME stable\" > /etc/apt/sources.list.d/docker.list;
             apt-get -yq update;
             apt-get -yq install docker-ce docker-ce-cli containerd.io docker-compose-plugin
         "
