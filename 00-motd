@@ -1,23 +1,61 @@
 #!/bin/bash
-# Dynamic MOTD with hostname-framed header, OS/Proxmox detection, colorized warnings, aligned dividers
+# Dynamic MOTD with hostname-framed header, OS/Proxmox detection,
+# colorized warnings, aligned dividers, and safer update checks.
 
-# Colors
+# Colors (fallback-friendly)
 RED="\e[31m"
 YELLOW="\e[33m"
 GREEN="\e[32m"
 CYAN="\e[36m"
 RESET="\e[0m"
 
-HOSTNAME=$(hostname)
+# Helpers: safe command checks
+has() { command -v "$1" >/dev/null 2>&1; }
 
-LOAD1=$(cut -d " " -f1 /proc/loadavg)
-LOADS=$(cut -d " " -f1-3 /proc/loadavg)
-UPTIME=$(uptime -p | sed 's/^up //')
+HOSTNAME=$(hostname 2>/dev/null || echo "$(cat /etc/hostname 2>/dev/null || echo unknown)")
 
-# Memory usage
-MEM_TOTAL=$(free -m | awk '/Mem:/ {print $2}')
-MEM_USED=$(free -m | awk '/Mem:/ {print $3}')
-MEM_PERCENT=$(( MEM_USED * 100 / MEM_TOTAL ))
+# Load averages (safe fallback)
+if [[ -r /proc/loadavg ]]; then
+    LOAD1=$(awk '{print $1}' /proc/loadavg)
+    LOADS=$(awk '{print $1, $2, $3}' /proc/loadavg)
+else
+    if has uptime; then
+        LOAD1=$(uptime | awk -F'load average:' '{print $2}' | cut -d, -f1 | sed 's/^ *//')
+        LOADS=$(uptime | awk -F'load average:' '{print $2}' | sed 's/^ //')
+    else
+        LOAD1=0
+        LOADS="0, 0, 0"
+    fi
+fi
+
+# Uptime (fallback)
+if has uptime; then
+    UPTIME=$(uptime -p 2>/dev/null | sed 's/^up //')
+else
+    UPTIME="unknown"
+fi
+
+# Memory usage (safe parsing of /proc/meminfo if free isn't available)
+if has free; then
+    MEM_TOTAL=$(free -m | awk '/Mem:/ {print $2}')
+    MEM_USED=$(free -m | awk '/Mem:/ {print $3}')
+else
+    if [[ -r /proc/meminfo ]]; then
+        MEM_TOTAL=$(( $(awk '/MemTotal/ {print $2}' /proc/meminfo) / 1024 ))
+        MEM_FREE=$(( $(awk '/MemFree/ {print $2}' /proc/meminfo) / 1024 ))
+        MEM_BUFFERS=$(( $(awk '/Buffers/ {print $2}' /proc/meminfo) / 1024 ))
+        MEM_CACHED=$(( $(awk '/^Cached/ {print $2}' /proc/meminfo) / 1024 ))
+        MEM_USED=$(( MEM_TOTAL - MEM_FREE - MEM_BUFFERS - MEM_CACHED ))
+    else
+        MEM_TOTAL=0; MEM_USED=0
+    fi
+fi
+
+if [[ -n "$MEM_TOTAL" && "$MEM_TOTAL" -gt 0 ]]; then
+    MEM_PERCENT=$(( MEM_USED * 100 / MEM_TOTAL ))
+else
+    MEM_PERCENT=0
+fi
 
 # Colorize memory usage
 if [ "$MEM_PERCENT" -ge 90 ]; then
@@ -28,33 +66,82 @@ else
     MEM_COLOR=$GREEN
 fi
 
-# Colorize load
-if (( $(echo "$LOAD1 > 2" | bc -l) )); then
-    LOAD_COLOR=$RED
-elif (( $(echo "$LOAD1 > 1" | bc -l) )); then
-    LOAD_COLOR=$YELLOW
+# Colorize load using bc if available, otherwise simple numeric compare
+if has bc; then
+    if (( $(echo "$LOAD1 > 2" | bc -l) )); then
+        LOAD_COLOR=$RED
+    elif (( $(echo "$LOAD1 > 1" | bc -l) )); then
+        LOAD_COLOR=$YELLOW
+    else
+        LOAD_COLOR=$GREEN
+    fi
 else
-    LOAD_COLOR=$GREEN
+    # fallback: compare integer part
+    LOAD_INT=${LOAD1%%.*}
+    if [ "$LOAD_INT" -ge 2 ]; then
+        LOAD_COLOR=$RED
+    elif [ "$LOAD_INT" -ge 1 ]; then
+        LOAD_COLOR=$YELLOW
+    else
+        LOAD_COLOR=$GREEN
+    fi
 fi
 
-# OS / Proxmox info + updates
-if command -v pveversion >/dev/null 2>&1; then
+# OS / Proxmox info
+if has pveversion; then
     OS_INFO=$(pveversion | head -n1)
 else
-    OS_INFO=$(grep '^PRETTY_NAME=' /etc/os-release | cut -d= -f2 | tr -d '"')
+    if [[ -r /etc/os-release ]]; then
+        OS_INFO=$(grep '^PRETTY_NAME=' /etc/os-release | cut -d= -f2 | tr -d '"')
+    else
+        OS_INFO="unknown"
+    fi
 fi
 
-# Refresh package index quietly
-apt-get -qq update >/dev/null 2>&1
-UPDATES=$(apt list --upgradable 2>/dev/null | grep -vc "Listing...")
+# Updates: avoid running apt-get update on every login. Use cache if fresh,
+# otherwise kick off an asynchronous update and show a 'checking' indicator.
+UPDATES_TEXT="unknown"
+if has apt; then
+    APT_CACHE="/var/cache/apt/pkgcache.bin"
+    MAX_AGE=$((6 * 3600)) # 6 hours
+    CACHE_AGE=
+    if [[ -f "$APT_CACHE" ]]; then
+        CACHE_AGE=$(( $(date +%s) - $(stat -c %Y "$APT_CACHE") ))
+    else
+        CACHE_AGE=$((MAX_AGE + 1))
+    fi
 
-# Colorize updates
-if [ "$UPDATES" -eq 0 ]; then
-    UPDATE_COLOR=$GREEN
-elif [ "$UPDATES" -lt 10 ]; then
-    UPDATE_COLOR=$YELLOW
+    if [[ $CACHE_AGE -le $MAX_AGE ]]; then
+        # cache fresh: report upgradable packages
+        UPDATES=$(apt list --upgradable 2>/dev/null | grep -vc "Listing...")
+        UPDATES_TEXT="$UPDATES available"
+    else
+        # kick off background update for next logins; do not block login
+        if [[ $(id -u) -eq 0 ]]; then
+            apt-get -qq update >/dev/null 2>&1 &
+            disown || true
+            UPDATES_TEXT="checking (refreshing cache)"
+        else
+            UPDATES_TEXT="needs root to check"
+        fi
+    fi
 else
-    UPDATE_COLOR=$RED
+    UPDATES_TEXT="n/a"
+fi
+
+# Colorize updates if numeric
+UPDATE_COLOR=$GREEN
+if [[ "$UPDATES_TEXT" =~ ^[0-9]+ ]]; then
+    UPDATES_NUM=${UPDATES_TEXT%% *}
+    if [ "$UPDATES_NUM" -eq 0 ]; then
+        UPDATE_COLOR=$GREEN
+    elif [ "$UPDATES_NUM" -lt 10 ]; then
+        UPDATE_COLOR=$YELLOW
+    else
+        UPDATE_COLOR=$RED
+    fi
+else
+    UPDATE_COLOR=$YELLOW
 fi
 
 # Build header line
@@ -69,11 +156,15 @@ HEADER_LINE="${CYAN}${HEADER_CONTENT}${RESET}"
 VISIBLE_LENGTH=${#HEADER_CONTENT}    # Count without color codes
 DIVIDER="${CYAN}$(printf '%*s' "$VISIBLE_LENGTH" '' | tr ' ' '-')${RESET}"
 
-# Output
+# Output (avoid exiting non-zero on failures in any command)
 echo -e "$HEADER_LINE"
 echo -e " Load     : ${LOAD_COLOR}${LOADS}${RESET}"
-echo -e " Memory   : ${MEM_COLOR}${MEM_USED}M / ${MEM_TOTAL}M (${MEM_PERCENT}%)${RESET}"
+if [[ -n "$MEM_TOTAL" && "$MEM_TOTAL" -gt 0 ]]; then
+    echo -e " Memory   : ${MEM_COLOR}${MEM_USED}M / ${MEM_TOTAL}M (${MEM_PERCENT}%)${RESET}"
+else
+    echo -e " Memory   : ${YELLOW}unknown${RESET}"
+fi
 echo -e " Uptime   : ${GREEN}${UPTIME}${RESET}"
 echo -e " OS       : ${GREEN}${OS_INFO}${RESET}"
-echo -e " Updates  : ${UPDATE_COLOR}${UPDATES} available${RESET}"
+echo -e " Updates  : ${UPDATE_COLOR}${UPDATES_TEXT}${RESET}"
 echo -e "$DIVIDER"
