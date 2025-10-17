@@ -90,10 +90,17 @@ fi
 # OS / Proxmox info (concise)
 if has pveversion; then
     # pveversion prints multiple lines; the first typically contains build info.
-    # We'll extract the version number if possible and present a short form.
+    # We'll try to extract a three-part version (x.y.z). If the pve output
+    # uses a hyphenated patch like '7.2-10' we'll convert it to '7.2.10'.
     PVE_LINE=$(pveversion 2>/dev/null | head -n1 || true)
-    # try to capture something like 'pve-manager/7.2-10/...' -> show 'Proxmox VE 7.2'
-    if [[ "$PVE_LINE" =~ ([0-9]+\.[0-9]+) ]]; then
+    if [[ "$PVE_LINE" =~ ([0-9]+\.[0-9]+\.[0-9]+) ]]; then
+        # already x.y.z
+        OS_INFO="Proxmox VE ${BASH_REMATCH[1]}"
+    elif [[ "$PVE_LINE" =~ ([0-9]+\.[0-9]+)-([0-9]+) ]]; then
+        # convert x.y-z -> x.y.z
+        OS_INFO="Proxmox VE ${BASH_REMATCH[1]}.${BASH_REMATCH[2]}"
+    elif [[ "$PVE_LINE" =~ ([0-9]+\.[0-9]+) ]]; then
+        # fall back to x.y
         OS_INFO="Proxmox VE ${BASH_REMATCH[1]}"
     else
         OS_INFO="Proxmox VE"
