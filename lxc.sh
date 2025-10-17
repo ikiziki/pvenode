@@ -1,162 +1,124 @@
 #!/usr/bin/env bash
-# A streamlined LXC creation script for Proxmox VE
+# Optimized Interactive LXC Creation Script for Proxmox VE (No Heredocs)
+set -e
 
 # ---------- Variables ----------
 declare VMID HOSTNAME CORES MEMORY DISKSIZE STORAGE BRIDGE TEMPLATE PRIVILEGE NESTING ROOTPASSWORD
 
+# ---------- Colors ----------
+GREEN="\033[0;32m"; YELLOW="\033[1;33m"; RED="\033[0;31m"; RESET="\033[0m"
+
 # ---------- Functions ----------
+
 setup() {
-    echo ""
-    echo "==== Basic Setup ===="
-    read -p "Enter the hostname (eg: my-container): " HOSTNAME
-    read -p "Enter the number of CPU cores (eg: 2): " CORES
-    read -p "Enter the amount of RAM (in MB): " MEMORY
-    read -p "Enter the root disk size (in GB): " DISKSIZE
+    echo -e "\n==== Basic Setup ===="
+    read -rp "Hostname (eg: my-container): " HOSTNAME
+    read -rp "CPU cores (eg: 2): " CORES
+    read -rp "Memory (MB): " MEMORY
+    read -rp "Disk size (GB): " DISKSIZE
 }
 
 vmid() {
-    DEFAULT_VMID=$(pvesh get /cluster/nextid)
-    read -p "Next available VMID is $DEFAULT_VMID. Press Enter to accept or type a custom VMID: " CUSTOM_VMID
+    local nextid custom
+    nextid=$(pvesh get /cluster/nextid)
+    read -rp "Next available VMID is ${nextid}. Press Enter to accept or specify custom: " custom
 
-    if [[ -z "$CUSTOM_VMID" ]]; then
-        VMID="$DEFAULT_VMID"
-        echo "Assigned VMID: $VMID"
-    else
-        while true; do
-            if pvesh get /cluster/resources --type vm | awk '{print $2}' | grep -qw "$CUSTOM_VMID"; then
-                echo "VMID $CUSTOM_VMID is already in use."
-                read -p "Enter custom VMID: " CUSTOM_VMID
-            elif [[ ! "$CUSTOM_VMID" =~ ^[0-9]+$ ]]; then
-                echo "Invalid input. Please enter a numeric VMID."
-                read -p "Enter custom VMID: " CUSTOM_VMID
-            else
-                VMID="$CUSTOM_VMID"
-                echo "Using custom VMID: $VMID"
-                break
-            fi
-        done
-    fi
+    while :; do
+        if [[ -z "$custom" ]]; then
+            VMID="$nextid"; break
+        elif ! [[ "$custom" =~ ^[0-9]+$ ]]; then
+            read -rp "Invalid VMID. Enter numeric value: " custom
+        elif pvesh get /cluster/resources --type vm | awk '{print $2}' | grep -qw "$custom"; then
+            read -rp "VMID already in use. Enter another: " custom
+        else
+            VMID="$custom"; break
+        fi
+    done
+    echo -e "Using VMID: ${GREEN}$VMID${RESET}"
 }
 
 storage() {
-    echo ""
-    echo "==== Select Storage ===="
-    options=($(pvesm status | awk '$2 ~ /dir|lvmthin|zfspool|btrfs|cephfs|rbd|nfs|cifs/ {print $1}'))
-
-    if [ ${#options[@]} -eq 0 ]; then
-        echo "No valid storage backends found for container images."
-        return 1
-    fi
+    echo -e "\n==== Select Storage ===="
+    mapfile -t options < <(pvesm status | awk '$2 ~ /dir|lvmthin|zfspool|btrfs|cephfs|rbd|nfs|cifs/ {print $1}')
+    [[ ${#options[@]} -eq 0 ]] && { echo "No valid storage found."; exit 1; }
 
     for i in "${!options[@]}"; do
         echo " $((i+1)). ${options[$i]}"
     done
 
-    read -p "Select target [1-${#options[@]}]: " choice
-    if [[ "$choice" =~ ^[0-9]+$ ]] && [ "$choice" -ge 1 ] && [ "$choice" -le "${#options[@]}" ]; then
-        STORAGE=${options[$((choice-1))]}
-        echo "Selected storage: $STORAGE"
-    else
-        echo "Invalid target."
-        return 1
-    fi
+    read -rp "Select target [1-${#options[@]}]: " choice
+    STORAGE=${options[$((choice-1))]:-}
+    [[ -z "$STORAGE" ]] && { echo "Invalid choice."; exit 1; }
+    echo -e "Selected storage: ${GREEN}$STORAGE${RESET}"
 }
 
 template() {
-    echo ""
-    echo "==== Select Template ===="
-    templates=()
-    display=()
+    echo -e "\n==== Select Template ===="
+    mapfile -t templates < <(for s in $(pvesm status --content vztmpl | awk 'NR>1 {print $1}'); do pveam list "$s" | awk 'NR>1 {print $1}'; done)
+    [[ ${#templates[@]} -eq 0 ]] && { echo "No templates found."; exit 1; }
 
-    for store in $(pvesm status --content vztmpl | awk 'NR>1 {print $1}'); do
-        while read -r line; do
-            tmpl_file=$(echo "$line" | awk '{print $1}')
-            if [[ -n "$tmpl_file" ]]; then
-                templates+=("$tmpl_file")
-                tmpl_name="${tmpl_file%%.*}"
-                display+=("$tmpl_name")
-            fi
-        done < <(pveam list "$store" | awk 'NR>1')
+    for i in "${!templates[@]}"; do
+        echo " [$i] ${templates[$i]}"
     done
 
-    for i in "${!display[@]}"; do
-        echo " [$i] ${display[$i]}"
-    done
-
-    read -p "Select a template number: " choice
-    TEMPLATE=${templates[$choice]}
-    echo "Selected template: $TEMPLATE"
+    read -rp "Select template number: " choice
+    TEMPLATE=${templates[$choice]:-}
+    [[ -z "$TEMPLATE" ]] && { echo "Invalid choice."; exit 1; }
+    echo -e "Selected template: ${GREEN}$TEMPLATE${RESET}"
 }
 
 bridge() {
-    echo ""
-    echo "==== Select Network Bridge ===="
-    bridges=()
-    for dev in /sys/class/net/*; do
-        iface=$(basename "$dev")
-        if [[ -d "$dev/bridge" ]]; then
-            bridges+=("$iface")
-        fi
-    done
-
-    for i in "${!bridges[@]}"; do
-        echo " [$((i+1))] ${bridges[$i]}"
-    done
+    echo -e "\n==== Select Network Bridge ===="
+    mapfile -t bridges < <(for dev in /sys/class/net/*; do [[ -d "$dev/bridge" ]] && basename "$dev"; done)
 
     if [[ ${#bridges[@]} -eq 1 ]]; then
         BRIDGE="name=eth0,bridge=${bridges[0]},ip=dhcp"
-        echo "Auto-selected bridge: ${bridges[0]} (DHCP enabled)"
+        echo -e "Auto-selected bridge: ${GREEN}${bridges[0]}${RESET}"
     else
-        read -rp "Select a bridge [1-${#bridges[@]}]: " choice
+        for i in "${!bridges[@]}"; do
+            echo " [$((i+1))] ${bridges[$i]}"
+        done
+        read -rp "Select bridge [1-${#bridges[@]}]: " choice
         BRIDGE="name=eth0,bridge=${bridges[$((choice-1))]},ip=dhcp"
-        echo "Selected bridge: ${bridges[$((choice-1))]} (DHCP enabled)"
+        echo -e "Selected bridge: ${GREEN}${bridges[$((choice-1))]}${RESET}"
     fi
 }
 
-
 options() {
-    echo ""
-    echo "==== Container Options ===="
-    read -p "Should the container be privileged? (y/n) [n]: " priv
-    [[ "$priv" =~ ^[Yy]$ ]] && PRIVILEGE="0" || PRIVILEGE="1"
+    echo -e "\n==== Container Options ===="
+    read -rp "Privileged container? (y/n) [n]: " priv
+    PRIVILEGE=$([[ "$priv" =~ ^[Yy]$ ]] && echo "0" || echo "1")
 
-    read -p "Enable nesting? (y/n) [n]: " nest
-    [[ "$nest" =~ ^[Yy]$ ]] && NESTING="1" || NESTING="0"
+    read -rp "Enable nesting? (y/n) [n]: " nest
+    NESTING=$([[ "$nest" =~ ^[Yy]$ ]] && echo "1" || echo "0")
 
-    while true; do
-        read -s -p "Enter root password for container: " pass1; echo
-        read -s -p "Confirm root password: " pass2; echo
-        if [[ "$pass1" == "$pass2" && -n "$pass1" ]]; then
-            ROOTPASSWORD="$pass1"
-            break
-        else
-            echo "Passwords do not match or are empty. Please try again."
-        fi
+    while :; do
+        read -srp "Enter root password: " pass1; echo
+        read -srp "Confirm root password: " pass2; echo
+        [[ "$pass1" == "$pass2" && -n "$pass1" ]] && { ROOTPASSWORD="$pass1"; break; }
+        echo "Passwords do not match or empty, try again."
     done
 }
 
 create() {
-    echo ""
-    echo "==== Review Container Configuration ===="
-    echo "VMID      : $VMID"
-    echo "hostname  : $HOSTNAME"
-    echo "cores     : $CORES"
-    echo "memory    : $MEMORY"
-    echo "disk size : ${DISKSIZE}G"
-    echo "storage   : $STORAGE"
-    echo "bridge    : $BRIDGE"
-    echo "template  : $TEMPLATE"
-    echo "privileged: $PRIVILEGE"
-    echo "nesting   : $NESTING"
-    echo
+    echo -e "\n==== Review Configuration ===="
+    cat <<EOF
+VMID      : $VMID
+Hostname  : $HOSTNAME
+Cores     : $CORES
+Memory    : ${MEMORY}MB
+Disk Size : ${DISKSIZE}G
+Storage   : $STORAGE
+Bridge    : $BRIDGE
+Template  : $TEMPLATE
+Privileged: $PRIVILEGE
+Nesting   : $NESTING
+EOF
 
-    read -p "Proceed with container creation? (y/n): " confirm
-    if [[ ! "$confirm" =~ ^[Yy]$ ]]; then
-        echo "Container creation aborted."
-        exit 1
-    fi
+    read -rp "Proceed with container creation? (y/n): " confirm
+    [[ ! "$confirm" =~ ^[Yy]$ ]] && { echo "Aborted."; exit 0; }
 
-    echo "Creating container with VMID $VMID..."
+    echo -e "${YELLOW}Creating container...${RESET}"
     pct create "$VMID" "$TEMPLATE" \
         -hostname "$HOSTNAME" \
         -cores "$CORES" \
@@ -167,102 +129,67 @@ create() {
         -unprivileged "$PRIVILEGE" \
         -features nesting="$NESTING"
 
-    if [[ $? -eq 0 ]]; then
-        echo "Container $VMID created successfully."
-        echo "Starting container $VMID..."
-        pct start "$VMID"
-        if [[ $? -eq 0 ]]; then
-            echo "Container $VMID started successfully."
-        else
-            echo "Failed to start container $VMID."
-            exit 1
-        fi
-    else
-        echo "Container creation failed."
-        exit 1
-    fi
+    pct start "$VMID"
+    echo -e "${GREEN}Container $VMID started.${RESET}"
 }
 
 config() {
-    echo ""
-    echo "==== Post-Configuration ===="
-    echo "Configuring container with VMID $VMID..."
+    echo -e "\n==== Post-Configuration ===="
 
-    echo "Updating and upgrading container..."
-    pct exec "$VMID" -- bash -c "apt update && apt upgrade -y"
+    echo "Updating and installing base tools..."
+    pct exec "$VMID" -- bash -c "set -e; export DEBIAN_FRONTEND=noninteractive;
+        apt-get -yq update;
+        apt-get -yq upgrade;
+        apt-get -yq install curl gnupg lsb-release ca-certificates apt-transport-https sudo;
+        sed -i 's/^#\\?PermitRootLogin.*/PermitRootLogin yes/' /etc/ssh/sshd_config;
+        systemctl restart sshd;
+        rm -f /etc/update-motd.d/* /etc/update-motd.d/00-uname;
+        : > /etc/motd
+    "
 
-    echo "Installing base utilities..."
-    pct exec "$VMID" -- apt install -y curl gnupg lsb-release ca-certificates apt-transport-https sudo
-
-    echo "Enabling root SSH login..."
-    pct exec "$VMID" -- sed -i 's/^#\?PermitRootLogin.*/PermitRootLogin yes/' /etc/ssh/sshd_config
-    pct exec "$VMID" -- systemctl restart sshd
-
-    echo "Replacing default MOTD scripts..."
-    pct exec "$VMID" -- bash -c 'rm -f /etc/update-motd.d/*'
-    pct exec "$VMID" -- bash -c 'rm -f /etc/update-motd.d/00-uname'
-
-    # Check if custom MOTD file exists on host before attempting to push it
     if [[ -f /usr/local/sbin/pvenode/00-motd ]]; then
-        echo "Copying custom MOTD script into container..."
         pct push "$VMID" /usr/local/sbin/pvenode/00-motd /etc/update-motd.d/00-motd
         pct exec "$VMID" -- chmod +x /etc/update-motd.d/00-motd
+        echo -e "Custom MOTD installed."
     else
-        echo "WARNING: Custom MOTD script not found at /usr/local/sbin/pvenode/00-motd. Skipping MOTD setup."
+        echo -e "${YELLOW}WARNING:${RESET} Custom MOTD not found."
     fi
 
-    # Clear the contents of /etc/motd but retain the file
-    pct exec "$VMID" -- bash -c ': > /etc/motd'
+    read -rp "Install Docker? (y/n): " docker
+    if [[ "$docker" =~ ^[Yy]$ ]]; then
+        pct exec "$VMID" -- bash -c "set -e;
+            apt-get -yq update;
+            apt-get -yq install apt-transport-https ca-certificates curl gnupg lsb-release sudo;
+            source /etc/os-release;
+            ARCH=\$(dpkg --print-architecture);
+            CODENAME=\$(lsb_release -cs);
+            curl -fsSL https://download.docker.com/linux/\$ID/gpg | gpg --dearmor -o /usr/share/keyrings/docker-archive-keyring.gpg;
+            echo 'deb [arch=\$ARCH signed-by=/usr/share/keyrings/docker-archive-keyring.gpg] https://download.docker.com/linux/\$ID \$CODENAME stable' > /etc/apt/sources.list.d/docker.list;
+            apt-get -yq update;
+            apt-get -yq install docker-ce docker-ce-cli containerd.io docker-compose-plugin
+        "
+        echo -e "${GREEN}Docker installed.${RESET}"
 
-    read -p "Install Docker inside container $VMID? (y/n): " install_docker
-    if [[ "$install_docker" =~ ^[Yy]$ ]]; then
-        echo "Updating package lists..."
-        pct exec "$VMID" -- apt update
-
-        echo "Installing Docker prerequisites..."
-        pct exec "$VMID" -- apt install -y apt-transport-https ca-certificates curl gnupg lsb-release sudo
-
-        echo "Adding Docker GPG key and repository..."
-        pct exec "$VMID" -- bash -c '
-set -e
-source /etc/os-release
-ARCH=$(dpkg --print-architecture)
-CODENAME=$(lsb_release -cs)
-curl -fsSL https://download.docker.com/linux/$ID/gpg | gpg --dearmor -o /usr/share/keyrings/docker-archive-keyring.gpg
-echo "deb [arch=$ARCH signed-by=/usr/share/keyrings/docker-archive-keyring.gpg] https://download.docker.com/linux/$ID $CODENAME stable" > /etc/apt/sources.list.d/docker.list
-'
-
-        echo "Updating package lists again..."
-        pct exec "$VMID" -- apt update
-
-        echo "Installing Docker Engine and Compose plugin..."
-        pct exec "$VMID" -- apt install -y docker-ce docker-ce-cli containerd.io docker-compose-plugin
-
-        echo "Docker and Docker Compose plugin installed on container $VMID."
-
-        read -p "Install Portainer Agent inside container $VMID? (y/n): " install_portainer
-        if [[ "$install_portainer" =~ ^[Yy]$ ]]; then
-            echo "Setting up Portainer Agent..."
-            pct exec "$VMID" -- mkdir -p /opt/agent
-            pct exec "$VMID" -- docker run -d \
-                -p 9001:9001 \
-                --name portainer_agent \
-                --restart=always \
-                -v /var/run/docker.sock:/var/run/docker.sock \
-                -v /opt/agent:/data \
-                -v /var/lib/docker/volumes:/var/lib/docker/volumes \
-                portainer/agent:latest
-            echo "Portainer Agent installed on container $VMID."
+        read -rp "Install Portainer Agent? (y/n): " portainer
+        if [[ "$portainer" =~ ^[Yy]$ ]]; then
+            pct exec "$VMID" -- bash -c "mkdir -p /opt/agent;
+                docker run -d -p 9001:9001 --name portainer_agent --restart=always \
+                    -v /var/run/docker.sock:/var/run/docker.sock \
+                    -v /opt/agent:/data \
+                    -v /var/lib/docker/volumes:/var/lib/docker/volumes \
+                    portainer/agent:latest
+            "
+            echo -e "${GREEN}Portainer Agent installed.${RESET}"
         else
-            echo "Skipped Portainer Agent installation."
+            echo "Skipped Portainer."
         fi
     else
-        echo "Skipped Docker installation."
+        echo "Skipped Docker."
     fi
 
-    echo "Fetching assigned MAC address for eth0..."
+    echo "MAC address for eth0:"
     pct config "$VMID" | awk -F'[,=]' '/^net0:/ {for(i=1;i<=NF;i++) if($i~/hwaddr/) print $(i+1)}'
-    echo "Container post-configuration complete."
+    echo -e "${GREEN}Post-configuration complete.${RESET}"
 }
 
 # ---------- Main ----------
