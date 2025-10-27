@@ -23,16 +23,11 @@ fi
 HOSTNAME=$(hostname 2>/dev/null || echo "$(cat /etc/hostname 2>/dev/null || echo unknown)")
 
 # Load averages (safe fallback)
-# Prefer reading /proc/loadavg using shell builtins to avoid external
-# command dependencies and to behave correctly when PATH is minimal.
 if [ -r /proc/loadavg ]; then
-    # 'read' will split on IFS (space) and capture first three fields.
-    # Some environments may not include newline at EOF; use 'cat <file' form.
     read -r LOAD1 LOAD2 LOAD3 _ < /proc/loadavg || true
     LOADS="${LOAD1:-0} ${LOAD2:-0} ${LOAD3:-0}"
 else
     if has uptime; then
-        # uptime output looks like: " 10:23:45 up 5 days,  1:23,  3 users,  load average: 0.00, 0.01, 0.05"
         LOADS=$(uptime | awk -F'load average:' '{print $2}' | sed 's/^ //')
         LOAD1=$(printf "%s" "$LOADS" | cut -d, -f1 | sed 's/^ *//')
     else
@@ -41,14 +36,14 @@ else
     fi
 fi
 
-# Uptime (fallback)
+# Uptime
 if has uptime; then
     UPTIME=$(uptime -p 2>/dev/null | sed 's/^up //')
 else
     UPTIME="unknown"
 fi
 
-# Memory usage (safe parsing of /proc/meminfo if free isn't available)
+# Memory usage
 if has free; then
     MEM_TOTAL=$(free -m | awk '/Mem:/ {print $2}')
     MEM_USED=$(free -m | awk '/Mem:/ {print $3}')
@@ -79,7 +74,7 @@ else
     MEM_COLOR=$GREEN
 fi
 
-# Colorize load using bc if available, otherwise simple numeric compare
+# Colorize load
 if has bc; then
     if (( $(echo "$LOAD1 > 2" | bc -l) )); then
         LOAD_COLOR=$RED
@@ -89,7 +84,6 @@ if has bc; then
         LOAD_COLOR=$GREEN
     fi
 else
-    # fallback: compare integer part
     LOAD_INT=${LOAD1%%.*}
     if [ "$LOAD_INT" -ge 2 ]; then
         LOAD_COLOR=$RED
@@ -100,36 +94,27 @@ else
     fi
 fi
 
-# OS / Proxmox info (concise)
+# OS / Proxmox info
 if has pveversion; then
-    # pveversion prints multiple lines; the first typically contains build info.
-    # We'll try to extract a three-part version (x.y.z). If the pve output
-    # uses a hyphenated patch like '7.2-10' we'll convert it to '7.2.10'.
     PVE_LINE=$(pveversion 2>/dev/null | head -n1 || true)
     if [[ "$PVE_LINE" =~ ([0-9]+\.[0-9]+\.[0-9]+) ]]; then
-        # already x.y.z
         OS_INFO="Proxmox VE ${BASH_REMATCH[1]}"
     elif [[ "$PVE_LINE" =~ ([0-9]+\.[0-9]+)-([0-9]+) ]]; then
-        # convert x.y-z -> x.y.z
         OS_INFO="Proxmox VE ${BASH_REMATCH[1]}.${BASH_REMATCH[2]}"
     elif [[ "$PVE_LINE" =~ ([0-9]+\.[0-9]+) ]]; then
-        # fall back to x.y
         OS_INFO="Proxmox VE ${BASH_REMATCH[1]}"
     else
         OS_INFO="Proxmox VE"
     fi
 elif [[ -r /etc/os-release ]]; then
-    # Prefer a short Debian version if possible
     . /etc/os-release
     if [[ "$ID" == "debian" || "$ID_LIKE" =~ debian ]]; then
-        # VERSION_ID is usually like '11' or '12'
         if [[ -n "$VERSION_ID" ]]; then
             OS_INFO="Debian ${VERSION_ID}"
         else
             OS_INFO="Debian"
         fi
     else
-        # Fallback to short PRETTY_NAME trimmed to first comma-delimited part
         if [[ -n "$PRETTY_NAME" ]]; then
             OS_INFO=${PRETTY_NAME%%,*}
         else
@@ -140,9 +125,8 @@ else
     OS_INFO="unknown"
 fi
 
-# Kernel info (short)
+# Kernel info
 if has uname; then
-    # show kernel release and arch: '5.15.0-...' and 'x86_64'
     KERNEL_REL=$(uname -r 2>/dev/null || echo unknown)
     KERNEL_ARCH=$(uname -m 2>/dev/null || echo unknown)
     KERNEL_INFO="${KERNEL_REL} ${KERNEL_ARCH}"
@@ -150,13 +134,11 @@ else
     KERNEL_INFO="unknown"
 fi
 
-# Updates: avoid running apt-get update on every login. Use cache if fresh,
-# otherwise kick off an asynchronous update and show a 'checking' indicator.
+# Updates with slight delay when cache is stale
 UPDATES_TEXT="unknown"
 if has apt; then
     APT_CACHE="/var/cache/apt/pkgcache.bin"
-    MAX_AGE=$((6 * 3600)) # 6 hours
-    CACHE_AGE=
+    MAX_AGE=$((24 * 3600)) # 24 hours
     if [[ -f "$APT_CACHE" ]]; then
         CACHE_AGE=$(( $(date +%s) - $(stat -c %Y "$APT_CACHE") ))
     else
@@ -164,24 +146,22 @@ if has apt; then
     fi
 
     if [[ $CACHE_AGE -le $MAX_AGE ]]; then
-        # cache fresh: report upgradable packages
         UPDATES=$(apt list --upgradable 2>/dev/null | grep -vc "Listing...")
         UPDATES_TEXT="$UPDATES available"
     else
-        # kick off background update for next logins; do not block login
         if [[ $(id -u) -eq 0 ]]; then
-            apt-get -qq update >/dev/null 2>&1 &
-            disown || true
-            UPDATES_TEXT="checking (refreshing cache)"
+            apt-get -qq update >/dev/null 2>&1
+            UPDATES=$(apt list --upgradable 2>/dev/null | grep -vc "Listing...")
+            UPDATES_TEXT="$UPDATES available (refreshed)"
         else
-            UPDATES_TEXT="needs root to check"
+            UPDATES_TEXT="needs root to refresh"
         fi
     fi
 else
     UPDATES_TEXT="n/a"
 fi
 
-# Colorize updates if numeric
+# Colorize updates
 UPDATE_COLOR=$GREEN
 if [[ "$UPDATES_TEXT" =~ ^[0-9]+ ]]; then
     UPDATES_NUM=${UPDATES_TEXT%% *}
@@ -200,15 +180,11 @@ fi
 PREFIX="--------------------[ "
 SUFFIX=" ]--------------------"
 HEADER_CONTENT="${PREFIX}${HOSTNAME}${SUFFIX}"
-
-# Colorize header
 HEADER_LINE="${CYAN}${HEADER_CONTENT}${RESET}"
-
-# Build bottom divider of exact same visible length
-VISIBLE_LENGTH=${#HEADER_CONTENT}    # Count without color codes
+VISIBLE_LENGTH=${#HEADER_CONTENT}
 DIVIDER="${CYAN}$(printf '%*s' "$VISIBLE_LENGTH" '' | tr ' ' '-')${RESET}"
 
-# Output (avoid exiting non-zero on failures in any command)
+# Output
 echo -e "$HEADER_LINE"
 echo -e " Load     : ${LOAD_COLOR}${LOADS}${RESET}"
 if [[ -n "$MEM_TOTAL" && "$MEM_TOTAL" -gt 0 ]]; then
