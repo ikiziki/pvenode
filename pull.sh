@@ -47,7 +47,6 @@ git fetch --all --prune
 CURRENT_BRANCH=$(git rev-parse --abbrev-ref HEAD)
 UPSTREAM_REF="origin/main"
 
-# Helper to prompt yes/no
 prompt_yes_no() {
 	local prompt="$1" default=${2:-n}
 	local reply
@@ -59,7 +58,6 @@ prompt_yes_no() {
 	esac
 }
 
-# Check for uncommitted changes
 STATUS=$(git status --porcelain)
 if [[ -n "$STATUS" ]]; then
 	echo -e "${YELLOW}Uncommitted changes detected:${RESET}"
@@ -84,7 +82,6 @@ if [[ -n "$STATUS" ]]; then
 			TS=$(date +%Y%m%d-%H%M%S)
 			BACKUP_BRANCH="backup/${TS}"
 			echo "Creating backup branch ${BACKUP_BRANCH} from current state..."
-			# Create a stash of local changes then apply them to a new branch
 			git stash push -u -m "backup before update ${TS}" >/dev/null
 			if git stash list | grep -q "backup before update ${TS}"; then
 				git stash branch "${BACKUP_BRANCH}" >/dev/null || true
@@ -98,7 +95,6 @@ if [[ -n "$STATUS" ]]; then
 	fi
 fi
 
-# Compare local and remote
 LOCAL_HASH=$(git rev-parse @)
 REMOTE_HASH=$(git rev-parse "$UPSTREAM_REF" 2>/dev/null || true)
 BASE_HASH=$(git merge-base @ "$UPSTREAM_REF" 2>/dev/null || true)
@@ -140,14 +136,13 @@ else
 fi
 
 echo -e "${GREEN}Setting executable permissions for scripts...${RESET}"
-for f in lxc.sh pull.sh 00-motd; do
+for f in lxc.sh pull.sh 00-motd rm_beszel.sh; do
 	if [[ -f "$f" ]]; then
 		chmod +x "$f"
 		echo -e "  ${f} is now executable."
 	fi
 done
 
-# If 00-motd was updated in the repo (or differs from installed), deploy it
 REPO_MOTD="00-motd"
 TARGET_DIR="/etc/update-motd.d"
 TARGET_MOTD="${TARGET_DIR}/00-motd"
