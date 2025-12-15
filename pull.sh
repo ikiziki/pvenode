@@ -136,7 +136,7 @@ else
 fi
 
 echo -e "${GREEN}Setting executable permissions for scripts...${RESET}"
-for f in lxc.sh pull.sh 00-motd rm_beszel.sh; do
+for f in lxc.sh pull.sh 00-motd; do
 	if [[ -f "$f" ]]; then
 		chmod +x "$f"
 		echo -e "  ${f} is now executable."
