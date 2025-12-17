@@ -207,6 +207,26 @@ config() {
         echo "Skipped Docker."
     fi
 
+    # ---------- SNMP Installation ----------
+    read -rp "Install SNMP daemon (snmpd)? (y/n): " snmp
+    if [[ "$snmp" =~ ^[Yy]$ ]]; then
+        pct exec "$VMID" -- bash -c "
+            apt-get -yq update;
+            apt-get -yq install snmp snmpd;
+            # Backup default config
+            cp /etc/snmp/snmpd.conf /etc/snmp/snmpd.conf.bak
+            # Basic configuration allowing queries from 10.1.1.1
+            sed -i 's/^agentAddress.*/agentAddress udp:161/' /etc/snmp/snmpd.conf
+            sed -i 's/^rocommunity .*/rocommunity public 10.1.1.1/' /etc/snmp/snmpd.conf
+            systemctl enable snmpd;
+            systemctl restart snmpd
+        "
+        countdown 2
+        echo -e "${GREEN}SNMP daemon installed and configured for 10.1.1.1.${RESET}"
+    else
+        echo "Skipped SNMP installation."
+    fi
+
     echo "MAC address for eth0:"
     pct config "$VMID" | awk -F'[,=]' '/^net0:/ {for(i=1;i<=NF;i++) if($i~/hwaddr/) print $(i+1)}'
     echo -e "${GREEN}Post-configuration complete.${RESET}"
